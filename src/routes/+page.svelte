@@ -1,133 +1,56 @@
 <script lang="ts">
   import Dropzone from 'svelte-file-dropzone';
-
   import { parseImageToRGBA } from 'src/processUpload';
   import { onMount } from 'svelte';
-  import type { Tensor } from '@tensorflow/tfjs';
   import { browser } from '$app/environment';
-
-  const clamp = (value: number, min: number, max: number) => {
-    return Math.min(Math.max(value, min), max);
-  };
-
-  /**
-   * Expects RGB from [0, 255]
-   *
-   * From https://stackoverflow.com/a/17243070/3833068
-   */
-  function RGBtoHSV(r: number, g: number, b: number): [number, number, number] {
-    r = clamp(r, 0, 255);
-    g = clamp(g, 0, 255);
-    b = clamp(b, 0, 255);
-
-    var max = Math.max(r, g, b),
-      min = Math.min(r, g, b),
-      d = max - min,
-      h,
-      s = max === 0 ? 0 : d / max,
-      v = max / 255;
-
-    switch (max) {
-      case min:
-        h = 0;
-        break;
-      case r:
-        h = g - b + d * (g < b ? 6 : 0);
-        h /= 6 * d;
-        break;
-      case g:
-        h = b - r + d * 2;
-        h /= 6 * d;
-        break;
-      case b:
-        h = r - g + d * 4;
-        h /= 6 * d;
-        break;
-      default: {
-        throw new Error('Invalid color');
-      }
-    }
-
-    return [h, s, v];
-  }
-
-  /**
-   * Expects HSV from [0, 1], returns RGB from [0, 255]
-   *
-   * From https://stackoverflow.com/a/17243070/3833068
-   */
-  function HSVtoRGB(h: number, s: number, v: number): [number, number, number] {
-    h = clamp(h, 0, 1);
-    s = clamp(s, 0, 1);
-    v = clamp(v, 0, 1);
-
-    var r, g, b, i, f, p, q, t;
-    i = Math.floor(h * 6);
-    f = h * 6 - i;
-    p = v * (1 - s);
-    q = v * (1 - f * s);
-    t = v * (1 - (1 - f) * s);
-    switch (i % 6) {
-      case 0:
-        (r = v), (g = t), (b = p);
-        break;
-      case 1:
-        (r = q), (g = v), (b = p);
-        break;
-      case 2:
-        (r = p), (g = v), (b = t);
-        break;
-      case 3:
-        (r = p), (g = q), (b = v);
-        break;
-      case 4:
-        (r = t), (g = p), (b = v);
-        break;
-      case 5:
-        (r = v), (g = p), (b = q);
-        break;
-      default:
-        throw new Error('unreachable' + i);
-    }
-    return [r * 255, g * 255, b * 255];
-  }
+  import { EMBED_API_URL } from 'src/conf';
+  import { getWorkers, WorkerPoolManager } from 'src/workerPool';
 
   type ProcessState =
     | { type: 'notStarted' }
-    | { type: 'converting' }
-    | { type: 'converted'; data: Uint8ClampedArray; width: number; height: number }
+    | { type: 'uploaded'; data: Uint8ClampedArray; width: number; height: number }
     | { type: 'error'; message: string }
     | {
         type: 'training';
         data: Uint8ClampedArray;
         width: number;
         height: number;
+        palette: string[] | null;
+        sortedPalette: string[] | null;
       }
-    | { type: 'trained'; width: number; height: number };
+    | {
+        type: 'trained';
+        data: Uint8ClampedArray;
+        width: number;
+        height: number;
+        palette: string[];
+        sortedPalette: string[];
+        encoded: Uint8Array;
+        decoded: Uint8ClampedArray;
+        loss: number;
+      };
 
   let processState: ProcessState = { type: 'notStarted' };
-  let modelMod: typeof import('../model') | null = null;
+  let workerPoolP: Promise<WorkerPoolManager<any>> = browser ? getWorkers() : new Promise(() => {});
 
   onMount(async () => {
     const script = document.createElement('script');
     script.defer = true;
-    script.src = 'https://unpkg.com/img-comparison-slider@7/dist/index.js';
+    script.src = '/imgComparisonSlider.js';
     document.body.appendChild(script);
-
-    modelMod = await import('../model');
   });
 
   async function handleFilesSelect(e: any) {
     const { acceptedFiles } = e.detail;
     if (acceptedFiles.length) {
       const { data, width, height } = await parseImageToRGBA(acceptedFiles[0]);
-      processState = { type: 'converted', data, width, height };
+      processState = { type: 'uploaded', data, width, height };
     }
   }
 
   const renderToCanvas = (
     canvas: HTMLCanvasElement,
-    { data, width, height }: Extract<ProcessState, { type: 'converted' }>
+    { data, width, height }: Extract<ProcessState, { type: 'uploaded' | 'training' | 'trained' }>
   ) => {
     const ctx = canvas.getContext('2d')!;
     const imageData = new ImageData(data, width, height);
@@ -152,112 +75,163 @@
     img.src = scratchCanvas.toDataURL();
   };
 
+  let txImg: HTMLImageElement | null = null;
   let rxImg: HTMLImageElement | null = null;
-  const startTraining = async () => {
-    if (!modelMod) {
-      alert('Model not loaded yet');
-      return;
-    }
+  let displayMode: 'original' | 'encoded' = 'original';
 
-    if (processState.type !== 'converted') {
+  $: if (
+    txImg &&
+    (processState.type === 'uploaded' ||
+      processState.type === 'training' ||
+      processState.type === 'trained')
+  ) {
+    if (displayMode === 'original' || processState.type !== 'trained') {
+      setImageData(txImg, processState);
+    } else {
+      // Create grayscale image from the single channel
+      const { encoded, width, height } = processState;
+      const grayscaleImageData = new Uint8ClampedArray(encoded.length * 4);
+      for (let i = 0; i < encoded.length; i++) {
+        grayscaleImageData[i * 4 + 0] = encoded[i];
+        grayscaleImageData[i * 4 + 1] = encoded[i];
+        grayscaleImageData[i * 4 + 2] = encoded[i];
+        grayscaleImageData[i * 4 + 3] = 255;
+      }
+      setImageData(txImg, { data: grayscaleImageData, width, height });
+    }
+  }
+
+  const generate = async () => {
+    if (processState.type !== 'uploaded') {
       throw new Error('Invalid state: ' + processState.type);
     }
 
+    const workerPool = await workerPoolP;
+
     const { data, width, height } = processState;
-    processState = { type: 'training', data, width, height };
+    processState = { type: 'training', data, width, height, palette: null, sortedPalette: null };
 
-    const uniqPixels = new Set<number>();
-    const uniqPixelIndices = [];
+    // TODO: configurable
+    const numColors = 256;
 
-    // Map [0,255] to [-1,1] and strip off alpha channel
-    const dataFloat = new Float32Array(width * height * 3);
-    for (let pxIx = 0; pxIx < width * height; pxIx += 1) {
-      // dataFloat[pxIx * 3 + 0] = data[pxIx * 4 + 0] / 127.5 - 1;
-      // dataFloat[pxIx * 3 + 1] = data[pxIx * 4 + 1] / 127.5 - 1;
-      // dataFloat[pxIx * 3 + 2] = data[pxIx * 4 + 2] / 127.5 - 1;
+    const palettes: { palette: Uint8Array; score: number }[] = await Promise.all(
+      new Array(8)
+        .fill(null)
+        .map(() =>
+          workerPool.submitWork(remote => remote.genPalette(new Uint8Array(data.buffer), numColors))
+        )
+    );
+    // use palette with lowest score
+    const { palette } = palettes.reduce((a, b) => (a.score < b.score ? a : b));
 
-      const r = data[pxIx * 4 + 0];
-      const g = data[pxIx * 4 + 1];
-      const b = data[pxIx * 4 + 2];
+    const allColors: [number, number, number][] = [];
 
-      // Convert RGB values to a single number
-      const px = r * 65536 + g * 256 + b;
-      if (!uniqPixels.has(px)) {
-        uniqPixels.add(px);
-        uniqPixelIndices.push(pxIx);
-      }
-      // else if (Math.random() > 0.8) {
-      //   uniqPixelIndices.push(pxIx);
-      // }
+    processState = {
+      type: 'training',
+      data,
+      width,
+      height,
+      palette: new Array(palette.length / 4).fill(null).map((_, i) => {
+        const r = palette[i * 4 + 0];
+        const g = palette[i * 4 + 1];
+        const b = palette[i * 4 + 2];
+        allColors.push([r, g, b]);
+        return `rgb(${r},${g},${b})`;
+      }),
+      sortedPalette: null,
+    };
 
-      const [h, s, v] = RGBtoHSV(r, g, b);
-      dataFloat[pxIx * 3 + 0] = h * 2 - 1;
-      dataFloat[pxIx * 3 + 1] = s * 2 - 1;
-      dataFloat[pxIx * 3 + 2] = v * 2 - 1;
+    // let colorPositions: number[];
+    // try {
+    //   colorPositions = await fetch(EMBED_API_URL, {
+    //     method: 'POST',
+    //     body: JSON.stringify(allColors),
+    //     headers: { 'Content-Type': 'application/json' },
+    //   }).then(async res => {
+    //     if (!res.ok) {
+    //       throw await res.text();
+    //     }
+    //     return (await res.json()) as number[];
+    //   });
+    // } catch (err) {
+    //   console.error(err);
+    //   alert(`Error embedding colors: ${err}`);
+    //   processState = { type: 'error', message: `${err}` };
+    //   return;
+    // }
+
+    const sortedColors = [...allColors];
+    // .sort((a, b) => {
+    //   const aIx = colorPositions[allColors.indexOf(a)];
+    //   const bIx = colorPositions[allColors.indexOf(b)];
+    //   return aIx - bIx;
+    // });
+    const sortedPalette = sortedColors.map(([r, g, b]) => `rgb(${r},${g},${b})`);
+    processState = {
+      type: 'training',
+      data,
+      width,
+      height,
+      palette: processState.palette,
+      sortedPalette,
+    };
+
+    const sortedPaletteData = new Uint8Array(sortedColors.length * 4);
+    for (const [i, [r, g, b]] of sortedColors.entries()) {
+      sortedPaletteData[i * 4 + 0] = r;
+      sortedPaletteData[i * 4 + 1] = g;
+      sortedPaletteData[i * 4 + 2] = b;
+      sortedPaletteData[i * 4 + 3] = 255;
     }
 
-    // modelMod.tf.setBackend('cpu');
-
-    const model = modelMod.buildModel(4, false);
-    model.summary();
-
-    const optimizer = modelMod.tf.train.sgd(0.1);
-
-    model.compile({
-      optimizer,
-      // loss: 'meanSquaredError',
-      loss: 'meanAbsoluteError',
+    // Split `data` into `navigator.hardwareConcurrency - 2` chunks so that it can be encoded in parallel
+    const numChunks = Math.max(1, (navigator.hardwareConcurrency || 0) - 2);
+    let chunkSize = Math.ceil(data.length / numChunks);
+    // ensure chunk size is divisible by 4
+    chunkSize = Math.floor(chunkSize / 4) * 4;
+    const chunks = new Array(numChunks).fill(null).map((_, i) => {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, data.length);
+      return data.subarray(start, end);
     });
 
-    const uniquePixelsData = new Float32Array(uniqPixelIndices.length * 3);
-    let i = 0;
-    for (const pxIx of uniqPixelIndices) {
-      const [h, s, v] = dataFloat.slice(pxIx * 3, pxIx * 3 + 3);
-      uniquePixelsData[i * 3 + 0] = h;
-      uniquePixelsData[i * 3 + 1] = s;
-      uniquePixelsData[i * 3 + 2] = v;
-      i += 1;
+    const encodedChunks: Uint8Array[] = await Promise.all(
+      chunks.map(chunk =>
+        workerPool.submitWork(remote =>
+          remote.encodeImage(sortedPaletteData, new Uint8Array(chunk))
+        )
+      )
+    );
+    const encodedImage = new Uint8Array(width * height);
+    // stitch chunks back together
+    for (const [i, chunk] of encodedChunks.entries()) {
+      encodedImage.set(chunk, i * (chunkSize / 4));
     }
 
-    const trainingTensor = modelMod.tf.tensor2d(uniquePixelsData, [uniqPixelIndices.length, 3]);
-    const fullInputsTensor = modelMod.tf.tensor2d(dataFloat, [width * height, 3]);
+    const decodedImage = await workerPool.submitWork(remote =>
+      remote.decodeImage(sortedPaletteData, encodedImage)
+    );
+    const decodedImageData = new Uint8ClampedArray(decodedImage.buffer);
+    if (!rxImg) {
+      throw new Error('rxImg not set');
+    }
+    setImageData(rxImg, { data: decodedImageData, width, height });
 
-    await model.fit(trainingTensor, trainingTensor, {
-      epochs: 50,
-      callbacks: {
-        onEpochEnd: async (epoch, logs) => {
-          console.log(`Epoch ${epoch}: loss = ${logs?.loss}`);
-          // TODO: Record + plot
-          const ys = model.predict(fullInputsTensor) as Tensor;
-          const ysData = await ys.data();
+    const loss: number = await workerPool.submitWork(remote =>
+      remote.computeLoss(new Uint8Array(data.buffer), decodedImage)
+    );
 
-          if (!rxImg) {
-            return;
-          }
-
-          const ysDataUint8 = new Uint8ClampedArray(width * height * 4);
-          for (let i = 0; i < ysData.length / 3; i += 1) {
-            const h = ysData[i * 3 + 0] * 0.5 + 0.5;
-            const s = ysData[i * 3 + 1] * 0.5 + 0.5;
-            const v = ysData[i * 3 + 2] * 0.5 + 0.5;
-
-            const [r, g, b] = HSVtoRGB(h, s, v);
-
-            ysDataUint8[i * 4 + 0] = r;
-            ysDataUint8[i * 4 + 1] = g;
-            ysDataUint8[i * 4 + 2] = b;
-            ysDataUint8[i * 4 + 3] = 255;
-          }
-
-          setImageData(rxImg, { data: ysDataUint8, width, height });
-        },
-      },
-      // batchSize: width * height,
-      // batchSize: Math.round((width * height) / 16),
-      batchSize: 256,
-      // shuffle: true,
-      // stepsPerEpoch: 32,
-    });
+    processState = {
+      type: 'trained',
+      data,
+      width,
+      height,
+      palette: processState.palette!,
+      sortedPalette,
+      encoded: encodedImage,
+      decoded: decodedImageData,
+      loss,
+    };
   };
 </script>
 
@@ -290,20 +264,24 @@
         <p>or</p>
         <p>Drag and drop one here</p>
       </Dropzone>
-    {:else if processState.type === 'converting'}
-      <p>Converting...</p>
-    {:else if processState.type === 'converted'}
+    {:else if processState.type === 'uploaded'}
       <canvas
         width={processState.width}
         height={processState.height}
         use:renderToCanvas={processState}
         style="max-width: min({processState.width}px, 80vw); margin: auto;"
       />
-    {:else if processState.type === 'training'}
+    {:else if processState.type === 'training' || processState.type === 'trained'}
       <img-comparison-slider
         style="width: 100%; max-width: min({processState.width}px, 80vw); margin: auto;"
       >
-        <img style="width: 100%" slot="first" use:setImageData={processState} alt="before" />
+        <img
+          style="width: 100%"
+          slot="first"
+          use:setImageData={processState}
+          alt="before"
+          bind:this={txImg}
+        />
         <img style="width: 100%" slot="second" alt="after" bind:this={rxImg} />
       </img-comparison-slider>
     {:else if processState.type === 'error'}
@@ -311,8 +289,43 @@
     {/if}
   </div>
   <div class="controls">
-    {#if processState.type === 'converted'}
-      <button on:click={startTraining}>Train</button>
+    {#if processState.type === 'uploaded'}
+      <button on:click={generate}>Generate</button>
+    {/if}
+    <div class="palettes-container">
+      {#if processState.type === 'training' || (processState.type === 'trained' && processState.palette)}
+        <div class="palette">
+          {#each processState.palette ?? [] as color}
+            <div class="palette-swatch" style="background-color: {color}" />
+          {/each}
+        </div>
+      {/if}
+      {#if processState.type === 'training' || (processState.type === 'trained' && processState.sortedPalette)}
+        <div class="palette">
+          {#each processState.sortedPalette ?? [] as color}
+            <div class="palette-swatch" style="background-color: {color}" />
+          {/each}
+        </div>
+      {/if}
+    </div>
+    {#if processState.type === 'trained'}
+      <div class="display-mode-wrapper">
+        <h3>Compare To</h3>
+        <div class="display-mode">
+          <label>
+            <input type="radio" name="display-mode" value="original" bind:group={displayMode} />
+            Original
+          </label>
+          <label>
+            <input type="radio" name="display-mode" value="encoded" bind:group={displayMode} />
+            Encoded
+          </label>
+        </div>
+      </div>
+      <div class="loss">
+        <h3>Loss</h3>
+        <p>{processState.loss}</p>
+      </div>
     {/if}
   </div>
 </div>
@@ -345,6 +358,32 @@
 
   .controls button {
     height: 24px;
+  }
+
+  .palettes-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .palette {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    max-width: 800px;
+  }
+
+  .palette-swatch {
+    width: 24px;
+    height: 24px;
+    border-right: 1px solid black;
+  }
+
+  .display-mode-wrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
   }
 
   :global(.custom-dropzone) {
