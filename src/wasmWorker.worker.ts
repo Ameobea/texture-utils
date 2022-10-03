@@ -35,6 +35,12 @@ const methods = {
 
     return engine.compute_loss(orig, roundtripped);
   },
+  buildFullLUT: async (palette: Uint8Array) => {
+    const engine = await engineP;
+
+    const lut = engine.build_full_lookup_table(palette);
+    return Comlink.transfer(lut, [lut.buffer]);
+  },
 };
 
 Comlink.expose(methods);

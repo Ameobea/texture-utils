@@ -1,4 +1,4 @@
-use kmeans_colors::{get_kmeans, get_kmeans_hamerly, Kmeans, Sort};
+use kmeans_colors::{get_kmeans_hamerly, Sort};
 use palette::{white_point::D65, ColorDifference, FromColor, IntoColor, Lab, Pixel, Srgb};
 use wasm_bindgen::prelude::*;
 
@@ -62,7 +62,7 @@ pub fn gen_palette(count: usize, pixel_data: &[u8], seed: f64) -> Vec<u8> {
   pixels
 }
 
-fn built_lookup_table(palette: &[u8]) -> Vec<Lab<D65, f32>> {
+fn build_lookup_table(palette: &[u8]) -> Vec<Lab<D65, f32>> {
   // There are 256 possible slots available in this single-channel encoding, so we can determine the color at each of them
   let mut lut: Vec<Lab<D65, f32>> = Vec::with_capacity(256);
   for slot_ix in 0..256 {
@@ -105,6 +105,20 @@ fn built_lookup_table(palette: &[u8]) -> Vec<Lab<D65, f32>> {
 }
 
 #[wasm_bindgen]
+pub fn build_full_lookup_table(palette: &[u8]) -> Vec<u8> {
+  let lut = build_lookup_table(palette);
+  let mut lut_bytes = Vec::with_capacity(lut.len() * 4);
+  for px in lut {
+    let srbg = Srgb::from_color(px).into_format();
+    lut_bytes.push(srbg.red);
+    lut_bytes.push(srbg.green);
+    lut_bytes.push(srbg.blue);
+    lut_bytes.push(255);
+  }
+  lut_bytes
+}
+
+#[wasm_bindgen]
 pub fn encode_image(palette: &[u8], img_pixel_data: &[u8]) -> Vec<u8> {
   assert_eq!(img_pixel_data.len() % 4, 0, "Pixel data must be RGBA");
   let mut img_pixel_data_without_alpha = Vec::with_capacity(img_pixel_data.len() / 4 * 3);
@@ -121,7 +135,7 @@ pub fn encode_image(palette: &[u8], img_pixel_data: &[u8]) -> Vec<u8> {
     .map(|x| x.into_format().into_color())
     .collect();
 
-  let lut = built_lookup_table(palette);
+  let lut = build_lookup_table(palette);
 
   let encoded_img: Vec<u8> = img_lab
     .into_iter()
@@ -144,7 +158,7 @@ pub fn encode_image(palette: &[u8], img_pixel_data: &[u8]) -> Vec<u8> {
 
 #[wasm_bindgen]
 pub fn decode_pixels(palette: &[u8], encoded_img: &[u8]) -> Vec<u8> {
-  let lut = built_lookup_table(palette);
+  let lut = build_lookup_table(palette);
 
   let mut decoded_img: Vec<u8> = Vec::with_capacity(encoded_img.len() * 4);
   for px in encoded_img {

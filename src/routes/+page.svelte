@@ -3,7 +3,6 @@
   import { parseImageToRGBA } from 'src/processUpload';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { EMBED_API_URL } from 'src/conf';
   import { getWorkers, WorkerPoolManager } from 'src/workerPool';
 
   type ProcessState =
@@ -25,11 +24,13 @@
         height: number;
         palette: string[];
         sortedPalette: string[];
+        sortedPaletteData: Uint8Array;
         encoded: Uint8Array;
         decoded: Uint8ClampedArray;
         loss: number;
       };
 
+  let innerWidth = 1024;
   let processState: ProcessState = { type: 'notStarted' };
   let workerPoolP: Promise<WorkerPoolManager<any>> = browser ? getWorkers() : new Promise(() => {});
 
@@ -79,6 +80,17 @@
   let rxImg: HTMLImageElement | null = null;
   let displayMode: 'original' | 'encoded' = 'original';
 
+  const buildGrayscaleImageFromEncoded = (encoded: Uint8Array) => {
+    const grayscaleImageData = new Uint8ClampedArray(encoded.length * 4);
+    for (let i = 0; i < encoded.length; i++) {
+      grayscaleImageData[i * 4 + 0] = encoded[i];
+      grayscaleImageData[i * 4 + 1] = encoded[i];
+      grayscaleImageData[i * 4 + 2] = encoded[i];
+      grayscaleImageData[i * 4 + 3] = 255;
+    }
+    return grayscaleImageData;
+  };
+
   $: if (
     txImg &&
     (processState.type === 'uploaded' ||
@@ -90,16 +102,40 @@
     } else {
       // Create grayscale image from the single channel
       const { encoded, width, height } = processState;
-      const grayscaleImageData = new Uint8ClampedArray(encoded.length * 4);
-      for (let i = 0; i < encoded.length; i++) {
-        grayscaleImageData[i * 4 + 0] = encoded[i];
-        grayscaleImageData[i * 4 + 1] = encoded[i];
-        grayscaleImageData[i * 4 + 2] = encoded[i];
-        grayscaleImageData[i * 4 + 3] = 255;
-      }
+      const grayscaleImageData = buildGrayscaleImageFromEncoded(encoded);
       setImageData(txImg, { data: grayscaleImageData, width, height });
     }
   }
+
+  const maybeResizeImage = (
+    data: Uint8ClampedArray,
+    width: number,
+    height: number
+  ): Uint8ClampedArray => {
+    if (width < 412 && height < 412) {
+      return data;
+    }
+
+    const scale = Math.min(412 / width, 412 / height);
+    const newWidth = Math.floor(width * scale);
+    const newHeight = Math.floor(height * scale);
+
+    const largeCanvas = document.createElement('canvas');
+    largeCanvas.width = width;
+    largeCanvas.height = height;
+    const largeCtx = largeCanvas.getContext('2d')!;
+    const largeImageData = new ImageData(data, width, height);
+    largeCtx.putImageData(largeImageData, 0, 0);
+
+    const smallCanvas = document.createElement('canvas');
+    smallCanvas.width = newWidth;
+    smallCanvas.height = newHeight;
+    const smallCtx = smallCanvas.getContext('2d')!;
+    smallCtx.drawImage(largeCanvas, 0, 0, newWidth, newHeight);
+
+    const smallImageData = smallCtx.getImageData(0, 0, newWidth, newHeight);
+    return smallImageData.data;
+  };
 
   const generate = async () => {
     if (processState.type !== 'uploaded') {
@@ -111,14 +147,19 @@
     const { data, width, height } = processState;
     processState = { type: 'training', data, width, height, palette: null, sortedPalette: null };
 
-    // TODO: configurable
+    // TODO: configurable?
     const numColors = 256;
 
+    // Downsample the image before generating palettes so things run reasonably fast
+    const resizedImageData = maybeResizeImage(data, width, height);
+
     const palettes: { palette: Uint8Array; score: number }[] = await Promise.all(
-      new Array(8)
+      new Array(Math.max((navigator.hardwareConcurrency || 4) - 2, 2))
         .fill(null)
         .map(() =>
-          workerPool.submitWork(remote => remote.genPalette(new Uint8Array(data.buffer), numColors))
+          workerPool.submitWork(remote =>
+            remote.genPalette(new Uint8Array(resizedImageData.buffer), numColors)
+          )
         )
     );
     // use palette with lowest score
@@ -228,12 +269,47 @@
       height,
       palette: processState.palette!,
       sortedPalette,
+      sortedPaletteData,
       encoded: encodedImage,
       decoded: decodedImageData,
       loss,
     };
   };
+
+  const download = async () => {
+    if (processState.type !== 'trained') {
+      throw new Error('Invalid state: ' + processState.type);
+    }
+
+    const { encoded, width, height, sortedPaletteData } = processState;
+    const grayscaleImageData = buildGrayscaleImageFromEncoded(encoded);
+    const grayscaleImage = new ImageData(grayscaleImageData, width, height);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.putImageData(grayscaleImage, 0, 0);
+
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = 'encoded.png';
+    a.click();
+
+    const fullLUT: Uint8Array = await (
+      await workerPoolP
+    ).submitWork(remote => remote.buildFullLUT(sortedPaletteData));
+
+    const formatted = JSON.stringify(Array.from(fullLUT));
+    console.log(formatted);
+
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(formatted);
+    }
+  };
 </script>
+
+<svelte:window bind:innerWidth />
 
 <svelte:head>
   <style lang="css">
@@ -256,14 +332,23 @@
 </svelte:head>
 
 <div class="root">
-  <div class="image">
+  <div class="content">
     {#if processState.type === 'notStarted'}
-      <Dropzone on:drop={handleFilesSelect} accept={['image/*']} containerClasses="custom-dropzone">
-        <button>Choose an image to process</button>
+      <div
+        style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center;"
+      >
+        <h2>Convert Texture to Single Channel</h2>
+        <Dropzone
+          on:drop={handleFilesSelect}
+          accept={['image/*']}
+          containerClasses="custom-dropzone"
+        >
+          <button>Choose an image to process</button>
 
-        <p>or</p>
-        <p>Drag and drop one here</p>
-      </Dropzone>
+          <p>or</p>
+          <p>Drag and drop one here</p>
+        </Dropzone>
+      </div>
     {:else if processState.type === 'uploaded'}
       <canvas
         width={processState.width}
@@ -272,18 +357,37 @@
         style="max-width: min({processState.width}px, 80vw); margin: auto;"
       />
     {:else if processState.type === 'training' || processState.type === 'trained'}
-      <img-comparison-slider
-        style="width: 100%; max-width: min({processState.width}px, 80vw); margin: auto;"
-      >
-        <img
-          style="width: 100%"
-          slot="first"
-          use:setImageData={processState}
-          alt="before"
-          bind:this={txImg}
-        />
-        <img style="width: 100%" slot="second" alt="after" bind:this={rxImg} />
-      </img-comparison-slider>
+      <div class="content-container">
+        <div class="image">
+          <img-comparison-slider
+            style="width: calc(min(100%, {processState.width}px)); height: auto; aspect-ratio: {processState.width} / {processState.height};"
+          >
+            <img
+              height={processState.height}
+              width={processState.width}
+              style="width: 100%; height: auto"
+              slot="first"
+              use:setImageData={processState}
+              alt="before"
+              bind:this={txImg}
+            />
+            <img
+              height={processState.height}
+              width={processState.width}
+              style="width: 100%; height: auto"
+              slot="second"
+              alt="after"
+              bind:this={rxImg}
+            />
+          </img-comparison-slider>
+        </div>
+        {#if processState.type === 'training'}
+          <div class="loading" style="display: flex; flex: 0">
+            <h3>Generating Palettes with K-Means</h3>
+            <p>This can take up to a minute</p>
+          </div>
+        {/if}
+      </div>
     {:else if processState.type === 'error'}
       <p>{processState.message}</p>
     {/if}
@@ -326,6 +430,7 @@
         <h3>Loss</h3>
         <p>{processState.loss}</p>
       </div>
+      <button on:click={download}>Download</button>
     {/if}
   </div>
 </div>
@@ -339,13 +444,29 @@
     margin-bottom: 20px;
   }
 
-  .image {
+  .content-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .content {
     display: flex;
     flex: 1;
     margin-left: 20px;
     margin-right: 20px;
     height: calc(100vh - 40px - 40px - 140px);
+  }
+
+  .image {
     overflow: auto;
+    display: flex;
+    flex: 1;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
   }
 
   .controls {
@@ -379,11 +500,27 @@
     border-right: 1px solid black;
   }
 
-  .display-mode-wrapper {
+  .display-mode-wrapper,
+  .loss {
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    margin-left: 20px;
+  }
+
+  .loss h3 {
+    margin-bottom: 0;
+  }
+
+  .loading {
+    /* center horizontally and vertically */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
   }
 
   :global(.custom-dropzone) {
