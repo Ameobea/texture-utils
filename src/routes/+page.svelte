@@ -429,6 +429,7 @@
       <div class="loss">
         <h3>Loss</h3>
         <p>{processState.loss}</p>
+        <br /><i>Anything 1 or less is very good</i>
       </div>
       <button on:click={download}>Download</button>
     {/if}

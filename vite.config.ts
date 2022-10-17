@@ -23,6 +23,17 @@ const config: UserConfig = {
       src: resolve('./src'),
     },
   },
+  build: {
+    sourcemap: true,
+  },
+  worker: {
+    rollupOptions: {
+      output: {
+        sourcemap: true,
+      },
+    },
+    format: 'es',
+  },
 };
 
 export default config;
