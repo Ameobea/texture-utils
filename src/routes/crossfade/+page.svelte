@@ -1,17 +1,25 @@
+<script lang="ts" context="module">
+  export interface CrossfadeParams {
+    threshold: number;
+    debug: boolean;
+    contrastCorrectedBlending: boolean;
+    grid: GridParams;
+  }
+</script>
+
 <script lang="ts">
   import Dropzone from 'svelte-file-dropzone';
   import { parseImageToRGBA } from 'src/processUpload';
   import { getWorkers, type WorkerPoolManager } from 'src/workerPool';
   import { browser } from '$app/environment';
+  import GridControls, { buildDefaultGridParams, type GridParams } from './GridControls.svelte';
+  import { deepClone, deepEqual } from 'src/deepEqual';
 
-  interface CrossfadeParams {
-    threshold: number;
-    debug: boolean;
-  }
-
-  const buildDefaultCrossfadeParams = (): CrossfadeParams => ({
+  const buildDefaultCrossfadeParams = (tileCount: number): CrossfadeParams => ({
     threshold: 0.99,
     debug: false,
+    contrastCorrectedBlending: false,
+    grid: buildDefaultGridParams(tileCount),
   });
 
   type ProcessState =
@@ -32,11 +40,11 @@
     | {
         type: 'generated';
         images: { data: Uint8ClampedArray; dataURL: string }[];
-        generated: { data: Uint8ClampedArray; dataURL: string };
         width: number;
         height: number;
         params: CrossfadeParams;
       };
+  let output: Uint8ClampedArray | null = null;
 
   let processState: ProcessState = { type: 'notStarted' };
   let workerPoolP: Promise<WorkerPoolManager<any>> = browser ? getWorkers() : new Promise(() => {});
@@ -120,7 +128,65 @@
     ctx.putImageData(imageData, 0, 0);
   };
 
-  const generate = async () => {
+  let outCanvas: HTMLCanvasElement | null = null;
+  let genState: {
+    lastParams: CrossfadeParams | null;
+    nextParams: CrossfadeParams | null;
+    isGenerating: boolean;
+  } = { lastParams: null, nextParams: null, isGenerating: false };
+  const generate = async (params: CrossfadeParams) => {
+    if (processState.type !== 'generated') {
+      throw new Error('Unreachable');
+    }
+
+    if (deepEqual(params, genState.lastParams)) {
+      console.log('Skipping generation, params are the same');
+      return;
+    }
+    console.log('Generating with params', params);
+
+    if (genState.isGenerating) {
+      console.log('Queueing generation');
+      genState.nextParams = params;
+      return;
+    }
+    genState.isGenerating = true;
+
+    const workerPool = await workerPoolP;
+    const { images, width, height } = processState;
+
+    const generated = new Uint8ClampedArray(
+      (
+        await workerPool.submitWork(worker => worker.crossfadeGenerate(width, height, params))
+      ).buffer
+    );
+
+    if (!outCanvas) {
+      throw new Error('Unreachable');
+    }
+    renderToCanvas(outCanvas, {
+      data: generated,
+      width: width * images.length,
+      height: height * images.length,
+    });
+
+    output = generated;
+    genState.lastParams = deepClone(params);
+
+    genState.isGenerating = false;
+    if (genState.nextParams) {
+      const nextParams = genState.nextParams;
+      genState.nextParams = null;
+      await generate(nextParams);
+    }
+  };
+
+  $: params = processState.type === 'generated' ? processState.params : null;
+  $: if (params) {
+    generate(params);
+  }
+
+  const generateFirst = async () => {
     if (processState.type !== 'uploaded') {
       throw new Error('Unreachable');
     }
@@ -131,21 +197,17 @@
 
     await workerPool.submitWork(worker => worker.setCrossfadeTextures(images.map(img => img.data)));
 
-    const params = buildDefaultCrossfadeParams();
+    const tileCount = 4; // TODO: Configurable
+    const params = buildDefaultCrossfadeParams(tileCount);
     const generated = new Uint8ClampedArray(
       (
-        await workerPool.submitWork(worker =>
-          worker.crossfadeGenerate(width, height, params.threshold, params.debug)
-        )
+        await workerPool.submitWork(worker => worker.crossfadeGenerate(width, height, params))
       ).buffer
     );
+    output = generated;
     processState = {
       type: 'generated',
       images,
-      generated: {
-        data: generated,
-        dataURL: rgbaToDataURL(generated, width * images.length, height * images.length),
-      },
       width,
       height,
       params,
@@ -192,17 +254,25 @@
       </div>
     {:else if processState.type === 'generating'}
       <h2>Generating...</h2>
-    {:else if processState.type === 'generated'}
-      <canvas
-        width={outputWidth}
-        height={outputHeight}
-        use:renderToCanvas={{
-          data: processState.generated.data,
-          width: outputWidth,
-          height: outputHeight,
-        }}
-        style="max-width: min({outputWidth}px, 80vw); max-height: min({outputHeight}px, calc(100vh - 200px)); margin: auto;"
-      />
+    {:else if processState.type === 'generated' && output}
+      <div class="generated">
+        <div style="display: flex; flex: 1;">
+          <canvas
+            bind:this={outCanvas}
+            width={outputWidth}
+            height={outputHeight}
+            use:renderToCanvas={{
+              data: output,
+              width: outputWidth,
+              height: outputHeight,
+            }}
+            style="max-width: min({outputWidth}px, 80vw); max-height: min({outputHeight}px, calc(100vh - 200px)); margin: auto;"
+          />
+        </div>
+        <div style="display: flex; flex: 1; justify-content: center; align-items: center;">
+          <GridControls bind:state={processState.params.grid} />
+        </div>
+      </div>
     {/if}
   </div>
   <div class="controls">
@@ -212,9 +282,84 @@
       {:else}
         <div class="buttons-container">
           <button on:click={() => (processState = { type: 'notStarted' })}>Reset</button>
-          <button on:click={generate}>Generate</button>
+          <button on:click={generateFirst}>Generate</button>
         </div>
       {/if}
+    {:else if processState.type === 'generated'}
+      <div class="buttons-container">
+        <button on:click={() => (processState = { type: 'notStarted' })}>Reset</button>
+        <div class="input-group">
+          <label for="debug">
+            <input
+              type="checkbox"
+              id="debug"
+              checked={processState.params.debug}
+              on:change={() => {
+                if (processState.type !== 'generated') {
+                  throw new Error('Unreachable');
+                }
+
+                processState = {
+                  ...processState,
+                  params: { ...processState.params, debug: !processState.params.debug },
+                };
+              }}
+            />
+            Debug
+          </label>
+        </div>
+        <div class="input-group">
+          <label for="contrastCorrectedBlending">
+            <input
+              type="checkbox"
+              id="contrastCorrectedBlending"
+              disabled
+              checked={processState.params.contrastCorrectedBlending}
+              on:change={() => {
+                if (processState.type !== 'generated') {
+                  throw new Error('Unreachable');
+                }
+
+                processState = {
+                  ...processState,
+                  params: {
+                    ...processState.params,
+                    contrastCorrectedBlending: !processState.params.contrastCorrectedBlending,
+                  },
+                };
+              }}
+            />
+            <!-- svelte-ignore security-anchor-rel-noreferrer -->
+            <a href="https://www.shadertoy.com/view/lsKGz3#" target="_blank">
+              Contrast Corrected Blending
+            </a>
+          </label>
+        </div>
+        <div class="input-group">
+          <label for="threshold">Threshold</label>
+          <input
+            type="range"
+            id="threshold"
+            min="0"
+            max="1"
+            step="0.01"
+            value={processState.params.threshold}
+            on:change={e => {
+              if (processState.type !== 'generated') {
+                throw new Error('Unreachable');
+              }
+
+              processState = {
+                ...processState,
+                params: {
+                  ...processState.params,
+                  threshold: parseFloat(e.currentTarget.value),
+                },
+              };
+            }}
+          />
+        </div>
+      </div>
     {/if}
   </div>
 </div>
@@ -249,14 +394,6 @@
     margin-bottom: 8px;
   }
 
-  .content-container {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    justify-content: center;
-    align-items: center;
-  }
-
   .content {
     display: flex;
     flex: 1;
@@ -289,6 +426,12 @@
     color: red;
   }
 
+  .generated {
+    display: flex;
+    flex: 1;
+    flex-direction: row;
+  }
+
   .controls {
     display: flex;
     flex-direction: row;
@@ -308,5 +451,13 @@
     display: flex;
     flex-direction: row;
     gap: 8px;
+  }
+
+  .input-group {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    border-right: 1px solid #888;
+    padding-right: 8px;
   }
 </style>

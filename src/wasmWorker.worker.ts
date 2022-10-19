@@ -1,4 +1,5 @@
 import * as Comlink from 'comlink';
+import type { CrossfadeParams } from './routes/crossfade/+page.svelte';
 
 const engineP: Promise<typeof import('./engineComp/engine')> = import('./engineComp/engine').then(
   async engineMod => {
@@ -50,10 +51,36 @@ const methods = {
     engine.crossfade_reset();
     textureData.forEach((data, texIx) => engine.crossfade_set_texture(data, texIx));
   },
-  crossfadeGenerate: async (width: number, height: number, threshold: number, debug: boolean) => {
+  crossfadeGenerate: async (width: number, height: number, params: CrossfadeParams) => {
     const engine = await engineP;
 
-    const generated = engine.crossfade_generate(width, height, threshold, debug);
+    const tileCount = params.grid.length;
+    const indices = new Uint32Array(tileCount * tileCount);
+    const rotations = new Uint8Array(tileCount * tileCount);
+    const xOffsets = new Uint32Array(tileCount * tileCount);
+    const yOffsets = new Uint32Array(tileCount * tileCount);
+
+    params.grid.forEach((row, rowIx) => {
+      row.forEach((col, colIx) => {
+        indices[rowIx * tileCount + colIx] = col.texIx;
+        rotations[rowIx * tileCount + colIx] = col.rotation;
+        xOffsets[rowIx * tileCount + colIx] = col.offsetX;
+        yOffsets[rowIx * tileCount + colIx] = col.offsetY;
+      });
+    });
+
+    console.log({ tileCount, indices, rotations, xOffsets, yOffsets, width, height });
+    engine.crossfade_set_texture_indices(indices);
+    engine.crossfade_set_texture_rotations(rotations);
+    engine.crossfade_set_texture_offsets(xOffsets, yOffsets);
+
+    const generated = engine.crossfade_generate(
+      width,
+      height,
+      tileCount,
+      params.threshold,
+      params.debug
+    );
     return Comlink.transfer(generated, [generated.buffer]);
   },
 };
