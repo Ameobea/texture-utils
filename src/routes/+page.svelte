@@ -30,7 +30,6 @@
         loss: number;
       };
 
-  let innerWidth = 1024;
   let processState: ProcessState = { type: 'notStarted' };
   let workerPoolP: Promise<WorkerPoolManager<any>> = browser ? getWorkers() : new Promise(() => {});
 
@@ -182,25 +181,6 @@
       sortedPalette: null,
     };
 
-    // let colorPositions: number[];
-    // try {
-    //   colorPositions = await fetch(EMBED_API_URL, {
-    //     method: 'POST',
-    //     body: JSON.stringify(allColors),
-    //     headers: { 'Content-Type': 'application/json' },
-    //   }).then(async res => {
-    //     if (!res.ok) {
-    //       throw await res.text();
-    //     }
-    //     return (await res.json()) as number[];
-    //   });
-    // } catch (err) {
-    //   console.error(err);
-    //   alert(`Error embedding colors: ${err}`);
-    //   processState = { type: 'error', message: `${err}` };
-    //   return;
-    // }
-
     const sortedColors = [...allColors];
     // .sort((a, b) => {
     //   const aIx = colorPositions[allColors.indexOf(a)];
@@ -308,8 +288,6 @@
     }
   };
 </script>
-
-<svelte:window bind:innerWidth />
 
 <svelte:head>
   <style lang="css">

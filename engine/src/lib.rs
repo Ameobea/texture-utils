@@ -2,6 +2,8 @@ use kmeans_colors::{get_kmeans_hamerly, Sort};
 use palette::{white_point::D65, ColorDifference, FromColor, IntoColor, Lab, Pixel, Srgb};
 use wasm_bindgen::prelude::*;
 
+mod texture_crossfade;
+
 #[wasm_bindgen]
 extern "C" {
   #[wasm_bindgen(js_namespace = console)]

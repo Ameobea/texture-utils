@@ -8,6 +8,7 @@ const engineP: Promise<typeof import('./engineComp/engine')> = import('./engineC
 );
 
 const methods = {
+  // lut
   encodeImage: async (palette: Uint8Array, imgPixelData: Uint8Array): Promise<Uint8Array> => {
     const engine = await engineP;
 
@@ -40,6 +41,20 @@ const methods = {
 
     const lut = engine.build_full_lookup_table(palette);
     return Comlink.transfer(lut, [lut.buffer]);
+  },
+
+  // crossfade
+  setCrossfadeTextures: async (textureData: Uint8Array[]) => {
+    const engine = await engineP;
+
+    engine.crossfade_reset();
+    textureData.forEach((data, texIx) => engine.crossfade_set_texture(data, texIx));
+  },
+  crossfadeGenerate: async (width: number, height: number, threshold: number, debug: boolean) => {
+    const engine = await engineP;
+
+    const generated = engine.crossfade_generate(width, height, threshold, debug);
+    return Comlink.transfer(generated, [generated.buffer]);
   },
 };
 

@@ -7,7 +7,7 @@ node_modules
 .env.*
 !.env.example
 
-src/engineComp
+src/engineComp/*
 !src/engineComp/.gitkeep
 
 static/engine_bg.wasm

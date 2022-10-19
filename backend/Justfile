@@ -1,2 +1,0 @@
-run:
-  FLASK_APP=main.py flask run --port=4948
