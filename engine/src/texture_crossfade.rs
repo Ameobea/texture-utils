@@ -6,15 +6,32 @@ static mut TEXTURE_PTRS: [Option<Vec<u8>>; 64] = [
   None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
   None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
 ];
+static mut TEXTURE_AVERAGE_COLORS: [[f32; 3]; 64] = [[0.0; 3]; 64];
 
 static mut TEXTURE_INDICES: [usize; 64] = [0; 64];
 static mut TEXTURE_ROTATIONS: [u8; 64] = [0; 64];
 static mut TEXTURE_OFFSETS_X: [usize; 64] = [0; 64];
 static mut TEXTURE_OFFSETS_Y: [usize; 64] = [0; 64];
 
+fn compute_average_color(data: &[u8]) -> [f32; 3] {
+  let mut sum = [0.0; 3];
+  for i in 0..data.len() / 4 {
+    sum[0] += data[i * 4] as f32;
+    sum[1] += data[i * 4 + 1] as f32;
+    sum[2] += data[i * 4 + 2] as f32;
+  }
+  sum[0] /= data.len() as f32 / 4.0;
+  sum[1] /= data.len() as f32 / 4.0;
+  sum[2] /= data.len() as f32 / 4.0;
+  sum
+}
+
 #[wasm_bindgen]
 pub fn crossfade_set_texture(data: Vec<u8>, index: usize) {
-  unsafe { TEXTURE_PTRS[index] = Some(data) }
+  unsafe {
+    TEXTURE_AVERAGE_COLORS[index] = compute_average_color(&data);
+    TEXTURE_PTRS[index] = Some(data);
+  }
 }
 
 #[wasm_bindgen]
@@ -46,6 +63,7 @@ struct TileDescriptor<'a> {
   height: usize,
   tex_ix: usize,
   data: &'a [u8],
+  average_color: [f32; 3],
   rotation: u8,
   offset_x: usize,
   offset_y: usize,
@@ -243,6 +261,24 @@ fn read_texture(desc: &TileDescriptor, x: usize, y: usize) -> [f32; 3] {
   }
 }
 
+/// Based off of strategy from https://www.shadertoy.com/view/lsKGz3#
+fn contrast_correct(sample: [f32; 3], avg_color: [f32; 3], opacity_parts_squared: f32) -> [f32; 3] {
+  let divisor = opacity_parts_squared.sqrt();
+  let mut out = avg_color;
+  out[0] += (sample[0] - avg_color[0]) / divisor;
+  out[1] += (sample[1] - avg_color[1]) / divisor;
+  out[2] += (sample[2] - avg_color[2]) / divisor;
+  out
+}
+
+fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+  [
+    a[0] * (1. - t) + b[0] * t,
+    a[1] * (1. - t) + b[1] * t,
+    a[2] * (1. - t) + b[2] * t,
+  ]
+}
+
 #[wasm_bindgen]
 pub fn crossfade_generate(
   width: usize,
@@ -250,6 +286,7 @@ pub fn crossfade_generate(
   tile_count: usize,
   threshold: f32,
   debug: bool,
+  contrast_correction_factor: f32,
 ) -> Vec<u8> {
   if threshold < 0. || threshold > 1. {
     panic!("Threshold must be between 0 and 1");
@@ -265,6 +302,7 @@ pub fn crossfade_generate(
         height,
         tex_ix,
         data,
+        average_color: unsafe { TEXTURE_AVERAGE_COLORS[tex_ix] },
         rotation: unsafe { TEXTURE_ROTATIONS[tile_ix] },
         offset_x: unsafe { TEXTURE_OFFSETS_X[tile_ix] },
         offset_y: unsafe { TEXTURE_OFFSETS_Y[tile_ix] },
@@ -312,22 +350,42 @@ pub fn crossfade_generate(
         (tl_sample, tr_sample, bl_sample, br_sample)
       };
 
-      // bilinear interpolation
-      let top_sample = [
-        tl_sample[0] * (1. - normalized_x) + tr_sample[0] * normalized_x,
-        tl_sample[1] * (1. - normalized_x) + tr_sample[1] * normalized_x,
-        tl_sample[2] * (1. - normalized_x) + tr_sample[2] * normalized_x,
-      ];
-      let bot_sample = [
-        bl_sample[0] * (1. - normalized_x) + br_sample[0] * normalized_x,
-        bl_sample[1] * (1. - normalized_x) + br_sample[1] * normalized_x,
-        bl_sample[2] * (1. - normalized_x) + br_sample[2] * normalized_x,
-      ];
-      let sample = [
-        top_sample[0] * (1. - normalized_y) + bot_sample[0] * normalized_y,
-        top_sample[1] * (1. - normalized_y) + bot_sample[1] * normalized_y,
-        top_sample[2] * (1. - normalized_y) + bot_sample[2] * normalized_y,
-      ];
+      let horizontal_opacity_parts_squared =
+        normalized_x * normalized_x + (1. - normalized_x) * (1. - normalized_x);
+
+      let mut top_sample = mix(tl_sample, tr_sample, normalized_x);
+      let top_avg_color = mix(tl_tile.average_color, tr_tile.average_color, normalized_x);
+      let contrast_corredted_top_sample =
+        contrast_correct(top_sample, top_avg_color, horizontal_opacity_parts_squared);
+      top_sample = mix(
+        top_sample,
+        contrast_corredted_top_sample,
+        contrast_correction_factor,
+      );
+
+      let mut bot_sample = mix(bl_sample, br_sample, normalized_x);
+      let bot_avg_color = mix(bl_tile.average_color, br_tile.average_color, normalized_x);
+      let contrast_corrected_bot_sample =
+        contrast_correct(bot_sample, bot_avg_color, horizontal_opacity_parts_squared);
+      bot_sample = mix(
+        bot_sample,
+        contrast_corrected_bot_sample,
+        contrast_correction_factor,
+      );
+
+      let mut sample = mix(top_sample, bot_sample, normalized_y);
+      let avg_color = mix(top_avg_color, bot_avg_color, normalized_y);
+      let all_opacity_parts_squared = normalized_x * normalized_x * normalized_y
+        + (1. - normalized_x) * (1. - normalized_x) * normalized_y
+        + normalized_x * normalized_x * (1. - normalized_y)
+        + (1. - normalized_x) * (1. - normalized_x) * (1. - normalized_y);
+      let contrast_corrected_sample =
+        contrast_correct(sample, avg_color, all_opacity_parts_squared);
+      sample = mix(
+        sample,
+        contrast_corrected_sample,
+        contrast_correction_factor,
+      );
 
       out.extend_from_slice(&[sample[0] as u8, sample[1] as u8, sample[2] as u8, 255]);
     }

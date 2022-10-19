@@ -69,7 +69,6 @@ const methods = {
       });
     });
 
-    console.log({ tileCount, indices, rotations, xOffsets, yOffsets, width, height });
     engine.crossfade_set_texture_indices(indices);
     engine.crossfade_set_texture_rotations(rotations);
     engine.crossfade_set_texture_offsets(xOffsets, yOffsets);
@@ -79,7 +78,8 @@ const methods = {
       height,
       tileCount,
       params.threshold,
-      params.debug
+      params.debug,
+      params.contrastCorrectionFactor
     );
     return Comlink.transfer(generated, [generated.buffer]);
   },

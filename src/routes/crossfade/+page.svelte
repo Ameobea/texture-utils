@@ -2,7 +2,7 @@
   export interface CrossfadeParams {
     threshold: number;
     debug: boolean;
-    contrastCorrectedBlending: boolean;
+    contrastCorrectionFactor: number;
     grid: GridParams;
   }
 </script>
@@ -18,7 +18,7 @@
   const buildDefaultCrossfadeParams = (tileCount: number): CrossfadeParams => ({
     threshold: 0.99,
     debug: false,
-    contrastCorrectedBlending: false,
+    contrastCorrectionFactor: 0.7,
     grid: buildDefaultGridParams(tileCount),
   });
 
@@ -140,13 +140,10 @@
     }
 
     if (deepEqual(params, genState.lastParams)) {
-      console.log('Skipping generation, params are the same');
       return;
     }
-    console.log('Generating with params', params);
 
     if (genState.isGenerating) {
-      console.log('Queueing generation');
       genState.nextParams = params;
       return;
     }
@@ -270,7 +267,12 @@
           />
         </div>
         <div style="display: flex; flex: 1; justify-content: center; align-items: center;">
-          <GridControls bind:state={processState.params.grid} />
+          <GridControls
+            bind:state={processState.params.grid}
+            texWidth={processState.width}
+            texHeight={processState.height}
+            textureCount={processState.images.length}
+          />
         </div>
       </div>
     {/if}
@@ -290,49 +292,24 @@
         <button on:click={() => (processState = { type: 'notStarted' })}>Reset</button>
         <div class="input-group">
           <label for="debug">
-            <input
-              type="checkbox"
-              id="debug"
-              checked={processState.params.debug}
-              on:change={() => {
-                if (processState.type !== 'generated') {
-                  throw new Error('Unreachable');
-                }
-
-                processState = {
-                  ...processState,
-                  params: { ...processState.params, debug: !processState.params.debug },
-                };
-              }}
-            />
+            <input type="checkbox" id="debug" bind:checked={processState.params.debug} />
             Debug
           </label>
         </div>
         <div class="input-group">
-          <label for="contrastCorrectedBlending">
-            <input
-              type="checkbox"
-              id="contrastCorrectedBlending"
-              disabled
-              checked={processState.params.contrastCorrectedBlending}
-              on:change={() => {
-                if (processState.type !== 'generated') {
-                  throw new Error('Unreachable');
-                }
-
-                processState = {
-                  ...processState,
-                  params: {
-                    ...processState.params,
-                    contrastCorrectedBlending: !processState.params.contrastCorrectedBlending,
-                  },
-                };
-              }}
-            />
+          <label for="contrastCorrectionFactor">
             <!-- svelte-ignore security-anchor-rel-noreferrer -->
             <a href="https://www.shadertoy.com/view/lsKGz3#" target="_blank">
-              Contrast Corrected Blending
-            </a>
+              Contrast Corrected Blending Factor
+            </a><br /><br />
+            <input
+              type="range"
+              id="contrastCorrectionFactor"
+              min="0"
+              max="1"
+              step="0.01"
+              bind:value={processState.params.contrastCorrectionFactor}
+            />
           </label>
         </div>
         <div class="input-group">
