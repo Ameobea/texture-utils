@@ -6,6 +6,7 @@ node_modules
 .env
 .env.*
 !.env.example
+yarn-error.log
 
 src/engineComp/*
 !src/engineComp/.gitkeep
