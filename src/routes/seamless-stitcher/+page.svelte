@@ -5,9 +5,13 @@
     contrastCorrectionFactor: number;
     grid: GridParams;
   }
+
+  const description =
+    'Takes multiple similar seamless textures and stitches them together into a bigger output texture, retaining their seamlessness.';
 </script>
 
 <script lang="ts">
+  import SvelteSeo from 'svelte-seo';
   import Dropzone from 'svelte-file-dropzone';
   import { parseImageToRGBA } from 'src/processUpload';
   import { getWorkers, type WorkerPoolManager } from 'src/workerPool';
@@ -214,6 +218,24 @@
     };
   };
 </script>
+
+<SvelteSeo
+  title="Seamless Texture Stitcher"
+  {description}
+  openGraph={{
+    title: 'Seamless Texture Stitcher',
+    description,
+    type: 'website',
+    images: [
+      {
+        url: 'https://texture-utils.ameo.design/seamless-stitcher-og.jpg',
+        alt: 'A screenshot of the seamless texture stitcher UI.  Shows a large preview of a stitched concrete texture on the left and a grid with controls for each of the sub-tiles on the right',
+        width: 1438,
+        height: 879,
+      },
+    ],
+  }}
+/>
 
 <div class="root">
   <div class="content">

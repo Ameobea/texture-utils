@@ -11,6 +11,7 @@ const config = {
     prerender: {
       concurrency: 6,
     },
+    trailingSlash: 'always',
   },
   vitePlugin: {
     experimental: {
