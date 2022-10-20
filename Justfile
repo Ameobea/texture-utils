@@ -8,3 +8,6 @@ build:
 
 build-wasm:
   cd engine && just build
+
+deploy:
+  phost update texture-utils patch build

@@ -45,6 +45,8 @@
 </script>
 
 <script lang="ts">
+  import { captureMessage, getSentry } from 'src/sentry';
+
   export let state: GridParams;
   export let texWidth: number;
   export let texHeight: number;
@@ -117,6 +119,7 @@
 <div class="buttons-container">
   <button
     on:click={() => {
+      getSentry()?.captureMessage('Reset button clicked');
       state = buildDefaultGridParams(state.length);
     }}
   >
@@ -124,6 +127,7 @@
   </button>
   <button
     on:click={() => {
+      getSentry()?.captureMessage('Randomize rotations clicked');
       state = state.map(row =>
         row.map(cell => ({ ...cell, rotation: Math.floor(Math.random() * 4) }))
       );
@@ -133,6 +137,7 @@
   </button>
   <button
     on:click={() => {
+      getSentry()?.captureMessage('Randomize offsets clicked');
       state = state.map(row =>
         row.map(cell => ({
           ...cell,

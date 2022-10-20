@@ -14,6 +14,7 @@
   import { browser } from '$app/environment';
   import GridControls, { buildDefaultGridParams, type GridParams } from './GridControls.svelte';
   import { deepClone, deepEqual } from 'src/deepEqual';
+  import { getSentry } from '../../sentry';
 
   const buildDefaultCrossfadeParams = (tileCount: number): CrossfadeParams => ({
     threshold: 0.99,
@@ -187,6 +188,8 @@
     if (processState.type !== 'uploaded') {
       throw new Error('Unreachable');
     }
+
+    getSentry()?.captureMessage('Generating texture crossfade');
 
     processState = { ...processState, type: 'generating' };
     const workerPool = await workerPoolP;
