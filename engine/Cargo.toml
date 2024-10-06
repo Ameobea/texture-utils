@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-bindgen = { version = "=0.2.82" }
+wasm-bindgen = { version = "=0.2.92" }
 getrandom = { version = "0.2", features = ["js"] }
 palette = "0.6"
 console_error_panic_hook = "0.1"
