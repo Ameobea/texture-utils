@@ -1,5 +1,4 @@
 import * as Comlink from 'comlink';
-import type { CrossfadeParams } from './routes/crossfade/+page.svelte';
 
 const engineP: Promise<typeof import('./engineComp/engine')> = import('./engineComp/engine').then(
   async engineMod => {
@@ -7,6 +6,31 @@ const engineP: Promise<typeof import('./engineComp/engine')> = import('./engineC
     return engineMod;
   }
 );
+
+export interface CellParams {
+  texIx: number;
+  rotation: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export type GridParams = CellParams[][];
+
+export interface CrossfadeParams {
+  threshold: number;
+  debug: boolean;
+  contrastCorrectionFactor: number;
+  grid: GridParams;
+}
+
+export interface ColorRampStep {
+  color: [number, number, number];
+  position: number;
+}
+
+export interface ColorRamp {
+  steps: ColorRampStep[];
+}
 
 const methods = {
   // lut
@@ -83,6 +107,36 @@ const methods = {
     );
     return Comlink.transfer(generated, [generated.buffer]);
   },
+
+  // color ramp
+  setColorRampInputTexture: async (textureData: Uint8Array) => {
+    const engine = await engineP;
+
+    engine.color_ramp_set_input_texture(textureData);
+  },
+  applyColorRamp: async (ramp: ColorRamp) => {
+    const engine = await engineP;
+
+    const encodedRamp = new Float32Array(ramp.steps.length * 4);
+    for (let i = 0; i < ramp.steps.length; i++) {
+      const step = ramp.steps[i];
+      encodedRamp[i * 4 + 0] = step.color[0];
+      encodedRamp[i * 4 + 1] = step.color[1];
+      encodedRamp[i * 4 + 2] = step.color[2];
+      encodedRamp[i * 4 + 3] = step.position;
+    }
+
+    const generated = engine.color_ramp_apply_ramp(encodedRamp);
+    return Comlink.transfer(generated, [generated.buffer]);
+  },
+  getGrayscaleColorRampImageData: async (): Promise<Uint8Array> => {
+    const engine = await engineP;
+
+    const imgData = engine.color_ramp_get_grayscale_image_data();
+    return Comlink.transfer(imgData, [imgData.buffer]);
+  },
 };
+
+export type WorkerInterface = typeof methods;
 
 Comlink.expose(methods);

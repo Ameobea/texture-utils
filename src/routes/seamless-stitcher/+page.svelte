@@ -1,11 +1,4 @@
 <script lang="ts" context="module">
-  export interface CrossfadeParams {
-    threshold: number;
-    debug: boolean;
-    contrastCorrectionFactor: number;
-    grid: GridParams;
-  }
-
   const description =
     'Takes multiple similar seamless textures and stitches them together into a bigger output texture, retaining their seamlessness.';
 </script>
@@ -13,12 +6,13 @@
 <script lang="ts">
   import SvelteSeo from 'svelte-seo';
   import Dropzone from 'svelte-file-dropzone';
-  import { parseImageToRGBA } from 'src/processUpload';
+  import { parseImageToRGBA } from 'src/imageHelpers';
   import { getWorkers, type WorkerPoolManager } from 'src/workerPool';
   import { browser } from '$app/environment';
-  import GridControls, { buildDefaultGridParams, type GridParams } from './GridControls.svelte';
+  import GridControls, { buildDefaultGridParams } from './GridControls.svelte';
   import { deepClone, deepEqual } from 'src/deepEqual';
   import { getSentry } from '../../sentry';
+  import type { CrossfadeParams } from 'src/wasmWorker.worker';
 
   const buildDefaultCrossfadeParams = (tileCount: number): CrossfadeParams => ({
     threshold: 0.99,
@@ -93,7 +87,7 @@
     return scratchCanvas.toDataURL();
   };
 
-  async function handleFilesSelect(e: any) {
+  async function handleFilesSelect(e: CustomEvent<{ acceptedFiles: File[] }>) {
     const { acceptedFiles } = e.detail;
     if (acceptedFiles.length) {
       const parsed: {

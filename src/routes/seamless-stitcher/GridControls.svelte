@@ -1,11 +1,6 @@
 <script context="module" lang="ts">
-  export interface CellParams {
-    texIx: number;
-    rotation: number;
-    offsetX: number;
-    offsetY: number;
-  }
-  export type GridParams = CellParams[][];
+
+import type { GridParams } from 'src/wasmWorker.worker';
 
   export const buildDefaultGridParams = (tileCount: number): GridParams =>
     new Array(tileCount).fill(null).map((_, y) =>
@@ -46,6 +41,7 @@
 
 <script lang="ts">
   import { captureMessage, getSentry } from 'src/sentry';
+
 
   export let state: GridParams;
   export let texWidth: number;

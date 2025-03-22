@@ -1,6 +1,8 @@
 import * as Comlink from 'comlink';
+import type { WorkerInterface } from './wasmWorker.worker';
 
 export class WorkerPoolManager<T> {
+  private allWorkers: Comlink.Remote<T>[];
   private idleWorkers: Comlink.Remote<T>[];
 
   /**
@@ -12,8 +14,11 @@ export class WorkerPoolManager<T> {
   ][] = [];
 
   constructor(workers: Comlink.Remote<T>[]) {
-    this.idleWorkers = workers;
+    this.allWorkers = [...workers];
+    this.idleWorkers = [...workers];
   }
+
+  public getWorker = (workerIx: number) => this.allWorkers[workerIx];
 
   public submitWork = async <R>(
     work: (worker: Comlink.Remote<T>) => R | Promise<R>
@@ -54,7 +59,7 @@ let workers: Promise<WorkerPoolManager<any>> | null = null;
 
 const clamp = (x: number, min: number, max: number) => Math.min(Math.max(x, min), max);
 
-export const getWorkers = async () => {
+export const getWorkers = async (): Promise<WorkerPoolManager<WorkerInterface>> => {
   if (workers) {
     return workers;
   }
@@ -68,7 +73,7 @@ export const getWorkers = async () => {
     const numWorkers = clamp((navigator.hardwareConcurrency || 4) - 2, 1, 512);
     const workers = Array.from({ length: numWorkers }, () => {
       const worker = new workerMod.default();
-      const wrapped = Comlink.wrap<any>(worker);
+      const wrapped = Comlink.wrap<WorkerInterface>(worker);
       // wrapped.setWasmBytes(wasmBytes);
       return wrapped;
     });

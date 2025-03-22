@@ -1,6 +1,6 @@
 <script lang="ts">
   import Dropzone from 'svelte-file-dropzone';
-  import { parseImageToRGBA } from 'src/processUpload';
+  import { parseImageToRGBA } from 'src/imageHelpers';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { getWorkers, WorkerPoolManager } from 'src/workerPool';
@@ -500,27 +500,5 @@
     align-items: center;
     height: 100%;
     width: 100%;
-  }
-
-  :global(.custom-dropzone) {
-    background-color: #121212 !important;
-    color: #e8e8e8 !important;
-    /* margin-top: 20px; */
-    width: max(80%, 300px);
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  :global(.custom-dropzone button) {
-    font-size: 18px;
-    background-color: #333;
-    outline: none;
-    border: 1px solid #888;
-    padding: 4px 8px;
-  }
-
-  :global(.custom-dropzone p) {
-    margin-bottom: 8px;
-    margin-top: 16px;
   }
 </style>

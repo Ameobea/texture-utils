@@ -74,6 +74,12 @@
         enough for the things I use it for.
       </p>
     </div>
+    <div class="util">
+      <a href="/color-ramp-builder"><h2>Color Ramp Builder</h2></a>
+      <p>
+        Tool to create a color ramp that can be used to map a grayscale texture to color.
+      </p>
+    </div>
   </div>
 
   <footer>
@@ -86,7 +92,7 @@
   .root {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    min-height: 100vh;
     justify-content: center;
     font-size: 18px;
   }
@@ -99,9 +105,11 @@
   .utils {
     display: flex;
     flex-direction: row;
+    justify-content: center;
     margin-left: auto;
     margin-right: auto;
     flex-wrap: wrap;
+    max-width: 1400px;
   }
 
   .utils .util {
@@ -110,12 +118,13 @@
     padding: 1rem;
     border: 1px solid #ccc;
     border-radius: 0.5rem;
-    min-width: 300px;
+    min-width: 400px;
     max-width: 800px;
   }
 
   footer {
     margin-top: 2rem;
+    margin-bottom: 4px;
     text-align: center;
   }
 

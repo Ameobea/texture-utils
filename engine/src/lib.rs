@@ -1,14 +1,11 @@
+#![allow(static_mut_refs)]
+
 use kmeans_colors::{get_kmeans_hamerly, Sort};
 use palette::{white_point::D65, ColorDifference, FromColor, IntoColor, Lab, Pixel, Srgb};
 use wasm_bindgen::prelude::*;
 
+pub mod color_ramp_builder;
 pub mod texture_crossfade;
-
-#[wasm_bindgen]
-extern "C" {
-  #[wasm_bindgen(js_namespace = console)]
-  fn log(s: &str);
-}
 
 static mut PALETTE_GEN_SCORE: f32 = 8888.888;
 
@@ -38,8 +35,6 @@ pub fn gen_palette(count: usize, pixel_data: &[u8], seed: f64) -> Vec<u8> {
   let seed = unsafe { std::mem::transmute(seed) };
   let result = get_kmeans_hamerly(count, max_iter, converge, false, &lab, seed);
 
-  log("Successfully generated palette");
-  log(&format!("Score: {}", result.score));
   unsafe {
     PALETTE_GEN_SCORE = result.score;
   }
