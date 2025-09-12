@@ -32,6 +32,17 @@ export interface ColorRamp {
   steps: ColorRampStep[];
 }
 
+export interface ReverseColorRampParams {
+  colorA_srgb: [number, number, number];
+  colorB_srgb: [number, number, number];
+  vMin: number;
+  vMax: number;
+  curveSteepness: number;
+  curveOffset: number;
+  perpSigma: number;
+  baseFallback: number;
+}
+
 const methods = {
   // lut
   encodeImage: async (palette: Uint8Array, imgPixelData: Uint8Array): Promise<Uint8Array> => {
@@ -146,6 +157,34 @@ const methods = {
 
     const composed = engine.normal_map_compose(baseMapData, detailMapData, weight);
     return Comlink.transfer(composed, [composed.buffer]);
+  },
+
+  // reverse color ramp
+  reverseColorRampSetInputTexture: async (textureData: Uint8Array) => {
+    const engine = await engineP;
+
+    engine.reverse_color_ramp_set_input_texture(textureData);
+  },
+  reverseColorRamp: async (
+    width: number,
+    height: number,
+    params: ReverseColorRampParams
+  ): Promise<Uint8Array<ArrayBuffer>> => {
+    const engine = await engineP;
+
+    const generated = engine.reverse_color_ramp(
+      width,
+      height,
+      new Float32Array(params.colorA_srgb),
+      new Float32Array(params.colorB_srgb),
+      params.vMin,
+      params.vMax,
+      params.curveSteepness,
+      params.curveOffset,
+      params.perpSigma,
+      params.baseFallback
+    ) as Uint8Array<ArrayBuffer>;
+    return Comlink.transfer(generated, [generated.buffer]);
   },
 };
 

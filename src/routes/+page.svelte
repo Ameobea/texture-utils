@@ -87,6 +87,13 @@
         >.
       </p>
     </div>
+    <div class="util">
+      <a href="/reverse-color-ramp"><h2>Reverse Color Ramp</h2></a>
+      <p>
+        Generates a GLSL function that maps diffuse color to a scalar value (for us in things like
+        generating roughness/metalness) based on a user-defined reverse color ramp.
+      </p>
+    </div>
   </div>
 
   <footer>

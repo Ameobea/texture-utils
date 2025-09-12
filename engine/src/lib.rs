@@ -1,11 +1,13 @@
+#![feature(array_chunks)]
 #![allow(static_mut_refs)]
 
-use kmeans_colors::{Sort, get_kmeans_hamerly};
-use palette::{ColorDifference, FromColor, IntoColor, Lab, Pixel, Srgb, white_point::D65};
+use kmeans_colors::{get_kmeans_hamerly, Sort};
+use palette::{white_point::D65, ColorDifference, FromColor, IntoColor, Lab, Pixel, Srgb};
 use wasm_bindgen::prelude::*;
 
 pub mod color_ramp_builder;
 pub mod normal_map_compose;
+pub mod reverse_color_ramp;
 pub mod texture_crossfade;
 
 static mut PALETTE_GEN_SCORE: f32 = 8888.888;
