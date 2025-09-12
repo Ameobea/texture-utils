@@ -76,8 +76,15 @@
     </div>
     <div class="util">
       <a href="/color-ramp-builder"><h2>Color Ramp Builder</h2></a>
+      <p>Tool to create a color ramp that can be used to map a grayscale texture to color.</p>
+    </div>
+    <div class="util">
+      <a href="/normal-map-composer"><h2>Normal Map Composer</h2></a>
       <p>
-        Tool to create a color ramp that can be used to map a grayscale texture to color.
+        Blends two tangent-space normal maps using
+        <a href="https://colinbarrebrisebois.com/category/reoriented-normal-mapping/">
+          Reoriented Normal Mapping</a
+        >.
       </p>
     </div>
   </div>

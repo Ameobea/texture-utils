@@ -135,6 +135,18 @@ const methods = {
     const imgData = engine.color_ramp_get_grayscale_image_data();
     return Comlink.transfer(imgData, [imgData.buffer]);
   },
+
+  // normal map compose
+  normalMapCompose: async (
+    baseMapData: Uint8Array,
+    detailMapData: Uint8Array,
+    weight: number
+  ): Promise<Uint8Array> => {
+    const engine = await engineP;
+
+    const composed = engine.normal_map_compose(baseMapData, detailMapData, weight);
+    return Comlink.transfer(composed, [composed.buffer]);
+  },
 };
 
 export type WorkerInterface = typeof methods;

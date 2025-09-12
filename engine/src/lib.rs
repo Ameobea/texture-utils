@@ -1,18 +1,17 @@
 #![allow(static_mut_refs)]
 
-use kmeans_colors::{get_kmeans_hamerly, Sort};
-use palette::{white_point::D65, ColorDifference, FromColor, IntoColor, Lab, Pixel, Srgb};
+use kmeans_colors::{Sort, get_kmeans_hamerly};
+use palette::{ColorDifference, FromColor, IntoColor, Lab, Pixel, Srgb, white_point::D65};
 use wasm_bindgen::prelude::*;
 
 pub mod color_ramp_builder;
+pub mod normal_map_compose;
 pub mod texture_crossfade;
 
 static mut PALETTE_GEN_SCORE: f32 = 8888.888;
 
 #[wasm_bindgen]
-pub fn get_palette_gen_score() -> f32 {
-  unsafe { PALETTE_GEN_SCORE }
-}
+pub fn get_palette_gen_score() -> f32 { unsafe { PALETTE_GEN_SCORE } }
 
 #[wasm_bindgen]
 pub fn gen_palette(count: usize, pixel_data: &[u8], seed: f64) -> Vec<u8> {
@@ -32,7 +31,7 @@ pub fn gen_palette(count: usize, pixel_data: &[u8], seed: f64) -> Vec<u8> {
 
   let max_iter = 5;
   let converge = 0.001;
-  let seed = unsafe { std::mem::transmute(seed) };
+  let seed = f64::to_bits(seed);
   let result = get_kmeans_hamerly(count, max_iter, converge, false, &lab, seed);
 
   unsafe {
@@ -60,7 +59,8 @@ pub fn gen_palette(count: usize, pixel_data: &[u8], seed: f64) -> Vec<u8> {
 }
 
 fn build_lookup_table(palette: &[u8]) -> Vec<Lab<D65, f32>> {
-  // There are 256 possible slots available in this single-channel encoding, so we can determine the color at each of them
+  // There are 256 possible slots available in this single-channel encoding, so we can determine the
+  // color at each of them
   let mut lut: Vec<Lab<D65, f32>> = Vec::with_capacity(256);
   for slot_ix in 0..256 {
     // [0, 255] -> [0, palette.len() - 1]

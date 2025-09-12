@@ -135,8 +135,7 @@ fn project_box_coord_correctness() {
   );
 }
 
-/// Returns the indices around the current corneras  (top left, top right,
-/// bottom left, bottom right)
+/// Returns the indices around the current corners (top left, top right, bottom left, bottom right)
 ///
 /// TODO: Probably would be good to make a LUT for this
 fn get_tile_indices_for_corner(

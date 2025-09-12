@@ -2,7 +2,7 @@ import { browser } from '$app/environment';
 
 export const parseImageToRGBA = async (
   file: File
-): Promise<{ data: Uint8ClampedArray; width: number; height: number }> => {
+): Promise<{ data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number }> => {
   const image = await createImageBitmap(file);
   const canvas = document.createElement('canvas');
   canvas.width = image.width;
@@ -14,22 +14,36 @@ export const parseImageToRGBA = async (
 };
 
 export const setPixelsToCanvas = (
-  ysDataUint8: Uint8ClampedArray,
+  ysDataUint8: Uint8ClampedArray<ArrayBuffer>,
   width: number,
-  height: number
+  height: number,
+  outputCanvas?: HTMLCanvasElement
 ): HTMLCanvasElement => {
-  const scratchCanvas = document.createElement('canvas');
-  const scratchCtx = scratchCanvas.getContext('2d')!;
-  scratchCanvas.width = width;
-  scratchCanvas.height = height;
+  const canvas = (() => {
+    if (outputCanvas) {
+      return outputCanvas;
+    }
+
+    const scratchCanvas = document.createElement('canvas');
+
+    scratchCanvas.width = width;
+    scratchCanvas.height = height;
+    return scratchCanvas;
+  })();
+
+  const scratchCtx = canvas.getContext('2d')!;
   const imageData = new ImageData(ysDataUint8, width, height);
   scratchCtx.putImageData(imageData, 0, 0);
-  return scratchCanvas;
+  return canvas;
 };
 
 export const setImageData = (
   img: HTMLImageElement,
-  { data: ysDataUint8, width, height }: { data: Uint8ClampedArray; width: number; height: number }
+  {
+    data: ysDataUint8,
+    width,
+    height,
+  }: { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number }
 ) => {
   if (!browser) {
     return;
@@ -41,7 +55,11 @@ export const setImageData = (
 
 export const setImageDataToCanvas = (
   canvas: HTMLCanvasElement,
-  { data: ysDataUint8, width, height }: { data: Uint8ClampedArray; width: number; height: number }
+  {
+    data: ysDataUint8,
+    width,
+    height,
+  }: { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number }
 ) => {
   if (!browser) {
     return;

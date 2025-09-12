@@ -11,6 +11,7 @@ wasm-bindgen = { version = "=0.2.92" }
 getrandom = { version = "0.2", features = ["js"] }
 palette = "0.6"
 console_error_panic_hook = "0.1"
+nalgebra = { version = "0.32" }
 
 [dependencies.kmeans_colors]
 version = "0.5"

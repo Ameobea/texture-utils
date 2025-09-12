@@ -1,6 +1,4 @@
 <script lang="ts">
-  export const prerender = true;
-
   import { maybeInitSentry } from '../sentry';
 
   maybeInitSentry();
