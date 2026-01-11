@@ -1,4 +1,3 @@
-#![feature(array_chunks)]
 #![allow(static_mut_refs)]
 
 use kmeans_colors::{get_kmeans_hamerly, Sort};

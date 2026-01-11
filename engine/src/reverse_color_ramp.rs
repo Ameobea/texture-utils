@@ -6,7 +6,7 @@ static mut INPUT_TEXTURE: *mut Vec<u8> = std::ptr::null_mut();
 fn srgb_to_linear(c: Vector3<f32>) -> Vector3<f32> { c.map(srgb_to_linear_f) }
 
 fn linearize_image(image: &mut Vec<u8>) {
-  for chunk in image.array_chunks_mut::<4>() {
+  for chunk in unsafe { image.as_chunks_unchecked_mut::<4>() } {
     let r = chunk[0] as f32 / 255.;
     let g = chunk[1] as f32 / 255.;
     let b = chunk[2] as f32 / 255.;
