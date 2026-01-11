@@ -96,8 +96,10 @@ pub fn reverse_color_ramp(
       }
       // Generalized smoothstep: t^n / (t^n + (1-t)^n)
       let n = curve_steepness.max(1.);
-      let t_n = t.powf(n);
-      let one_minus_t_n = (1. - t).powf(n);
+      // let t_n = t.powf(n);
+      let t_n = fastapprox::fast::pow(t, n);
+      // let one_minus_t_n = (1. - t).powf(n);
+      let one_minus_t_n = fastapprox::fast::pow(1. - t, n);
       let t_curved = if t_n + one_minus_t_n > 0. {
         t_n / (t_n + one_minus_t_n)
       } else {

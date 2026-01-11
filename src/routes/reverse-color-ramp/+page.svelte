@@ -6,7 +6,7 @@
   import { getWorkers } from 'src/workerPool';
   import type { ReverseColorRampParams } from '../../wasmWorker.worker';
   import type { WorkerInterface } from '../../wasmWorker.worker';
-  import { generateRoughnessGLSL } from './glslGenerator';
+  import { buildReverseColorRampGenerator } from './glslGenerator';
   import ColorPicker from './ColorPicker.svelte';
 
   let workerP: Promise<Comlink.Remote<WorkerInterface>> = browser
@@ -105,7 +105,7 @@
   };
 
   const downloadGLSL = () => {
-    const glsl = generateRoughnessGLSL(params);
+    const glsl = buildReverseColorRampGenerator(params);
     const blob = new Blob([glsl], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
