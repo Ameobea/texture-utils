@@ -88,9 +88,16 @@
       </p>
     </div>
     <div class="util">
+      <a href="/normal-map-filter"><h2>Normal Map Filter</h2></a>
+      <p>
+        Filter normal maps to extract or remove detail at specific frequency scales.
+        Supports low-pass, high-pass, band-pass, and band-reject modes using Gaussian filtering.
+      </p>
+    </div>
+    <div class="util">
       <a href="/reverse-color-ramp"><h2>Reverse Color Ramp</h2></a>
       <p>
-        Generates a GLSL function that maps diffuse color to a scalar value (for us in things like
+        Generates a GLSL function that maps diffuse color to a scalar value (for use in things like
         generating roughness/metalness) based on a user-defined reverse color ramp.
       </p>
     </div>

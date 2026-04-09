@@ -41,6 +41,7 @@ export interface ReverseColorRampParams {
   curveOffset: number;
   perpSigma: number;
   baseFallback: number;
+  colorSpace?: 'srgb' | 'linear';
 }
 
 const methods = {
@@ -159,11 +160,28 @@ const methods = {
     return Comlink.transfer(composed, [composed.buffer]);
   },
 
-  // reverse color ramp
-  reverseColorRampSetInputTexture: async (textureData: Uint8Array) => {
+  // normal map filter
+  normalMapFilter: async (
+    pixelData: Uint8Array,
+    width: number,
+    height: number,
+    filterMode: number,
+    sigma: number,
+    sigmaHigh: number,
+    useBilateral: boolean,
+    rangeSigma: number
+  ): Promise<Uint8Array> => {
     const engine = await engineP;
 
-    engine.reverse_color_ramp_set_input_texture(textureData);
+    const filtered = engine.normal_map_filter(pixelData, width, height, filterMode, sigma, sigmaHigh, useBilateral, rangeSigma);
+    return Comlink.transfer(filtered, [filtered.buffer]);
+  },
+
+  // reverse color ramp
+  reverseColorRampSetInputTexture: async (textureData: Uint8Array, isSrgb: boolean) => {
+    const engine = await engineP;
+
+    engine.reverse_color_ramp_set_input_texture(textureData, isSrgb);
   },
   reverseColorRamp: async (
     width: number,

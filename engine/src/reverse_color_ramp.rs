@@ -6,6 +6,7 @@ static mut INPUT_TEXTURE: *mut Vec<u8> = std::ptr::null_mut();
 fn srgb_to_linear(c: Vector3<f32>) -> Vector3<f32> { c.map(srgb_to_linear_f) }
 
 fn linearize_image(image: &mut Vec<u8>) {
+  assert_eq!(image.len() % 4, 0, "Pixel data must be RGBA");
   for chunk in unsafe { image.as_chunks_unchecked_mut::<4>() } {
     let r = chunk[0] as f32 / 255.;
     let g = chunk[1] as f32 / 255.;
@@ -27,13 +28,12 @@ fn linearize_image(image: &mut Vec<u8>) {
 }
 
 #[wasm_bindgen]
-pub fn reverse_color_ramp_set_input_texture(mut input_texture: Vec<u8>) {
+pub fn reverse_color_ramp_set_input_texture(mut input_texture: Vec<u8>, is_srgb: bool) {
   console_error_panic_hook::set_once();
 
-  // expects RGBA
-  assert_eq!(input_texture.len() % 4, 0, "Pixel data must be RGBA");
-
-  linearize_image(&mut input_texture);
+  if is_srgb {
+    linearize_image(&mut input_texture);
+  }
   unsafe {
     if !INPUT_TEXTURE.is_null() {
       drop(Box::from_raw(INPUT_TEXTURE));

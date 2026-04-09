@@ -7,6 +7,7 @@ export type ReverseColorRampParams = {
   curveOffset: number; // [0, 1]
   perpSigma: number;
   baseFallback: number;
+  colorSpace?: 'srgb' | 'linear';
 };
 
 export type ReverseColorRampUniformData = {
@@ -62,7 +63,8 @@ export const buildReverseColorRampUniformData = (
 
 export const buildReverseColorRampUniformFunction = (
   fnName: string,
-  prefix = 'reverseColorRamp'
+  prefix = 'reverseColorRamp',
+  colorSpace: 'srgb' | 'linear' = 'srgb'
 ): string => `
 uniform vec3 ${prefix}A;
 uniform vec3 ${prefix}U;
@@ -74,8 +76,8 @@ uniform float ${prefix}CurveOffset;
 uniform float ${prefix}PerpSigma;
 uniform float ${prefix}BaseFallback;
 
-float ${fnName}(vec3 baseColor_linear) {
-  vec3 rel = baseColor_linear - ${prefix}A;
+float ${fnName}(vec3 baseColor${colorSpace === 'srgb' ? '_srgb' : '_linear'}) {
+  ${colorSpace === 'srgb' ? 'vec3 c = srgb_to_linear(baseColor_srgb);\n  vec3 rel = c' : 'vec3 rel = baseColor_linear'} - ${prefix}A;
   float proj = dot(rel, ${prefix}U);
 
   float t = clamp(proj * ${prefix}InvLen, 0.0, 1.0);
@@ -108,6 +110,7 @@ export const buildReverseColorRampGenerator = (
   p: ReverseColorRampParams,
   fnName = 'reverse_color_ramp'
 ): string => {
+  const colorSpace = p.colorSpace ?? 'srgb';
   const { A_lin, U, invLen, vMin, vMax, curveSteepness, curveOffset, perpSigma, baseFallback } =
     buildReverseColorRampUniformData(p);
 
@@ -116,8 +119,8 @@ export const buildReverseColorRampGenerator = (
   const inv2s2 = sigma > 0 ? 0.5 / (sigma * sigma) : 0;
 
   return `
-float ${fnName}(vec3 baseColor_srgb) {
-  vec3 c = srgb_to_linear(baseColor_srgb);
+float ${fnName}(vec3 baseColor${colorSpace === 'srgb' ? '_srgb' : '_linear'}) {
+  ${colorSpace === 'srgb' ? 'vec3 c = srgb_to_linear(baseColor_srgb);' : 'vec3 c = baseColor_linear;'}
 
   const vec3 A = vec3(${A_lin[0]}, ${A_lin[1]}, ${A_lin[2]});
   const vec3 U = vec3(${U[0]}, ${U[1]}, ${U[2]});

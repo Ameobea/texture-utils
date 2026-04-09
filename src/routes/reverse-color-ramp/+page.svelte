@@ -44,6 +44,9 @@
   let activeParams: ReverseColorRampParams = roughnessParams;
   let jsonImportText = '';
 
+  let inputColorSpace: 'srgb' | 'linear' = 'srgb';
+  let outputColorSpace: 'srgb' | 'linear' = 'srgb';
+
   let previewOpen = false;
   let previewLoading = false;
   let previewError = '';
@@ -97,6 +100,23 @@
 
   $: activeParams = getParamsForTarget(activeTarget);
 
+  const reuploadInputTexture = async () => {
+    if (!inputImage || !inputImageData) {
+      return;
+    }
+    const ctx = inputCanvas.getContext('2d');
+    const imgData = ctx?.getImageData(0, 0, inputImage.width, inputImage.height) ?? null;
+    if (!imgData) {
+      return;
+    }
+    const worker = await workerP;
+    await worker.reverseColorRampSetInputTexture(
+      new Uint8Array(imgData.data.buffer),
+      inputColorSpace === 'srgb'
+    );
+    generate();
+  };
+
   function swapColors() {
     const tmp = activeParams.colorA_srgb;
     activeParams.colorA_srgb = activeParams.colorB_srgb;
@@ -127,7 +147,10 @@
           return;
         }
         const worker = await workerP;
-        await worker.reverseColorRampSetInputTexture(new Uint8Array(imgData.data.buffer));
+        await worker.reverseColorRampSetInputTexture(
+          new Uint8Array(imgData.data.buffer),
+          inputColorSpace === 'srgb'
+        );
         inputImageData = imgData;
         generate();
       };
@@ -173,10 +196,16 @@
     }
   };
 
-  const buildGLSLForTarget = (target: RampTarget) => {
+  const getParamsWithColorSpace = (target: RampTarget): ReverseColorRampParams => {
     const params = getParamsForTarget(target);
+    return { ...params, colorSpace: outputColorSpace };
+  };
+
+  const buildGLSLForTarget = (target: RampTarget) => {
+    const params = getParamsWithColorSpace(target);
     const fnName = target === 'roughness' ? 'roughness_from_color' : 'metalness_from_color';
-    return `${ReverseColorRampCommonFunctions}\n${buildReverseColorRampGenerator(params, fnName)}`;
+    const needsSrgbHelper = outputColorSpace === 'srgb';
+    return `${needsSrgbHelper ? ReverseColorRampCommonFunctions + '\n' : ''}${buildReverseColorRampGenerator(params, fnName)}`;
   };
 
   const copyGLSL = async (target: RampTarget) => {
@@ -190,7 +219,7 @@
   };
 
   const downloadJSON = (target: RampTarget) => {
-    const json = JSON.stringify(getParamsForTarget(target), null, 2);
+    const json = JSON.stringify(getParamsWithColorSpace(target), null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -216,7 +245,7 @@
   }
 
   const copyJSON = async (target: RampTarget) => {
-    const json = JSON.stringify(getParamsForTarget(target), null, 2);
+    const json = JSON.stringify(getParamsWithColorSpace(target), null, 2);
     try {
       await navigator.clipboard.writeText(json);
       showMessage(`${targetLabels[target]} JSON copied to clipboard`, 'success');
@@ -238,6 +267,10 @@
     }
 
     const candidate = value as ReverseColorRampParams;
+    const colorSpaceValid =
+      candidate.colorSpace === undefined ||
+      candidate.colorSpace === 'srgb' ||
+      candidate.colorSpace === 'linear';
     return (
       isVec3(candidate.colorA_srgb) &&
       isVec3(candidate.colorB_srgb) &&
@@ -246,7 +279,8 @@
       isNumber(candidate.curveSteepness) &&
       isNumber(candidate.curveOffset) &&
       isNumber(candidate.perpSigma) &&
-      isNumber(candidate.baseFallback)
+      isNumber(candidate.baseFallback) &&
+      colorSpaceValid
     );
   };
 
@@ -341,6 +375,26 @@
       >
         Metalness
       </button>
+    </div>
+
+    <div class="color-space-toggles">
+      <label class="color-space-toggle">
+        Input texture color space:
+        <select
+          bind:value={inputColorSpace}
+          on:change={() => reuploadInputTexture()}
+        >
+          <option value="srgb">sRGB</option>
+          <option value="linear">Linear</option>
+        </select>
+      </label>
+      <label class="color-space-toggle">
+        Output shader color space:
+        <select bind:value={outputColorSpace}>
+          <option value="srgb">sRGB (shader converts to linear)</option>
+          <option value="linear">Linear (diffuse already linear)</option>
+        </select>
+      </label>
     </div>
 
     <div class="color-picker-center-wrapper">
@@ -566,6 +620,27 @@
   .preview-host.hidden {
     opacity: 0;
     pointer-events: none;
+  }
+
+  .color-space-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    justify-content: center;
+  }
+
+  .color-space-toggle {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.95rem;
+  }
+
+  .color-space-toggle select {
+    background: #222;
+    color: #e8e8e8;
+    border: 1px solid #666;
+    padding: 0.25rem 0.5rem;
   }
 
   .color-picker-center-wrapper {
