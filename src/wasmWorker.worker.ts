@@ -160,6 +160,28 @@ const methods = {
     return Comlink.transfer(composed, [composed.buffer]);
   },
 
+  // seamless tile maker
+  seamlessTileMaker: async (
+    pixelData: Uint8Array,
+    width: number,
+    height: number,
+    marginXFrac: number,
+    marginYFrac: number,
+    contrastCorrectionFactor: number
+  ): Promise<Uint8Array> => {
+    const engine = await engineP;
+
+    const generated = engine.seamless_tile_maker(
+      pixelData,
+      width,
+      height,
+      marginXFrac,
+      marginYFrac,
+      contrastCorrectionFactor
+    );
+    return Comlink.transfer(generated, [generated.buffer]);
+  },
+
   // normal map filter
   normalMapFilter: async (
     pixelData: Uint8Array,

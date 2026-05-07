@@ -8,6 +8,7 @@ pub mod color_ramp_builder;
 pub mod normal_map_compose;
 pub mod normal_map_filter;
 pub mod reverse_color_ramp;
+pub mod seamless_tile_maker;
 pub mod texture_crossfade;
 
 static mut PALETTE_GEN_SCORE: f32 = 8888.888;

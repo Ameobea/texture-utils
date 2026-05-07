@@ -63,6 +63,18 @@
       </p>
     </div>
     <div class="util">
+      <a href="/seamless-tile-maker"><h2>Seamless Tile Maker</h2></a>
+      <p>
+        Takes a single near-seamless texture and produces a same-size output that tiles cleanly by
+        blending the image with a half-period-shifted copy of itself in a configurable margin
+        around the seams.
+      </p>
+      <p>
+        Optional variance-preserving (contrast-corrected) blending preserves detail in the seam
+        region for textures with strong high-frequency content.
+      </p>
+    </div>
+    <div class="util">
       <a href="/single-channel-compressor"><h2>Single-Channel Texture Compressor</h2></a>
       <p>
         Uses pallette reduction to pack an RGB texture into a single 256-color channel. Allows for
@@ -99,6 +111,13 @@
       <p>
         Generates a GLSL function that maps diffuse color to a scalar value (for use in things like
         generating roughness/metalness) based on a user-defined reverse color ramp.
+      </p>
+    </div>
+    <div class="util">
+      <a href="/svg-path-editor"><h2>SVG Path Editor</h2></a>
+      <p>
+        Edit simple open SVG paths on a grid with snapping, point insertion/removal, and live path
+        output.
       </p>
     </div>
   </div>
