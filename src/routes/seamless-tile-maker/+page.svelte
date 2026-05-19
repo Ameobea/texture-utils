@@ -31,6 +31,17 @@
   let contrastCorrectionFactor = 0.7;
   let processing = false;
 
+  // Frequency-aware blending: split the input into low- and high-frequency
+  // bands, blend each with band-appropriate margins, then recombine.
+  // Mitigates muddy seams from lighting gradients that plain blending can't
+  // hide. See seamless_tile_maker.rs for the algorithm.
+  let frequencyAware = false;
+  // Sigma for the low/high split (pixels).  Re-derived on image load.
+  let splitSigma = 32;
+  // 0 = Final, 1 = Low pass (raw), 2 = High pass (raw),
+  // 3 = Low pass (blended), 4 = High pass (blended).
+  let viewMode = 0;
+
   const clampMargin = (v: number) => {
     if (Number.isNaN(v)) return 0;
     return Math.min(0.5, Math.max(0, v));
@@ -77,17 +88,37 @@
     const { data, width, height } = await parseImageToRGBA(file);
     const dataURL = rgbaToDataURL(data, width, height);
     state = { type: 'loaded', image: { data, width, height, dataURL } };
+    // Pick a reasonable default sigma proportional to the image scale.  A
+    // sigma around 1/16 of the smaller dimension empirically captures
+    // broad lighting gradients without eating into texture detail.
+    splitSigma = Math.max(1, Math.round(Math.min(width, height) / 16));
     // Wait for the canvas to be inserted into the DOM, then run the first
     // pass so the user sees a result immediately.
     await tick();
     applyFilter();
   };
 
+  interface GenParams {
+    marginX: number;
+    marginY: number;
+    contrast: number;
+    frequencyAware: boolean;
+    splitSigma: number;
+    viewMode: number;
+  }
+  const paramsEqual = (a: GenParams, b: GenParams) =>
+    a.marginX === b.marginX &&
+    a.marginY === b.marginY &&
+    a.contrast === b.contrast &&
+    a.frequencyAware === b.frequencyAware &&
+    a.splitSigma === b.splitSigma &&
+    a.viewMode === b.viewMode;
+
   let outputDataURL: string | null = null;
   let genState: {
     isGenerating: boolean;
-    nextParams: { marginX: number; marginY: number; contrast: number } | null;
-    lastParams: { marginX: number; marginY: number; contrast: number } | null;
+    nextParams: GenParams | null;
+    lastParams: GenParams | null;
   } = { isGenerating: false, nextParams: null, lastParams: null };
 
   const applyFilter = async () => {
@@ -95,13 +126,15 @@
       return;
     }
 
-    const myParams = { marginX, marginY, contrast: contrastCorrectionFactor };
-    if (
-      genState.lastParams &&
-      genState.lastParams.marginX === myParams.marginX &&
-      genState.lastParams.marginY === myParams.marginY &&
-      genState.lastParams.contrast === myParams.contrast
-    ) {
+    const myParams: GenParams = {
+      marginX,
+      marginY,
+      contrast: contrastCorrectionFactor,
+      frequencyAware,
+      splitSigma,
+      viewMode,
+    };
+    if (genState.lastParams && paramsEqual(genState.lastParams, myParams)) {
       return;
     }
     if (genState.isGenerating) {
@@ -120,7 +153,10 @@
         image.height,
         myParams.marginX,
         myParams.marginY,
-        myParams.contrast
+        myParams.contrast,
+        myParams.frequencyAware,
+        myParams.splitSigma,
+        myParams.viewMode
       );
 
       const imgData = new Uint8ClampedArray(filtered);
@@ -141,7 +177,12 @@
   $: if (
     browser &&
     state.type === 'loaded' &&
-    (marginX !== undefined || marginY !== undefined || contrastCorrectionFactor !== undefined)
+    (marginX !== undefined ||
+      marginY !== undefined ||
+      contrastCorrectionFactor !== undefined ||
+      frequencyAware !== undefined ||
+      splitSigma !== undefined ||
+      viewMode !== undefined)
   ) {
     applyFilter();
   }
@@ -158,6 +199,9 @@
     marginX = 0.2;
     marginY = 0.2;
     contrastCorrectionFactor = 0.7;
+    frequencyAware = false;
+    splitSigma = 32;
+    viewMode = 0;
   };
 
   // Toggle between rendering the output once or as a 2x2 tile grid so the
@@ -326,6 +370,40 @@
               <span class="hint">
                 Variance-preserving blend. Reduces wash-out in the seam region.
               </span>
+            </div>
+
+            <div class="control-row freq-controls">
+              <label class="checkbox-label">
+                <input type="checkbox" bind:checked={frequencyAware} />
+                Frequency-aware blending
+              </label>
+              <span class="hint">
+                Splits the image into low- (lighting) and high- (detail) frequency bands
+                and blends each separately. Hides muddy seams caused by lighting gradients.
+              </span>
+
+              {#if frequencyAware}
+                <label for="split-sigma" class="sub-label">
+                  Split sigma: {splitSigma.toFixed(1)} px
+                </label>
+                <input
+                  type="range"
+                  id="split-sigma"
+                  min="1"
+                  max={Math.max(8, Math.round(Math.min(state.image.width, state.image.height) / 4))}
+                  step="0.5"
+                  bind:value={splitSigma}
+                />
+
+                <label for="view-mode" class="sub-label">View</label>
+                <select id="view-mode" bind:value={viewMode}>
+                  <option value={0}>Final</option>
+                  <option value={1}>Low pass (raw)</option>
+                  <option value={2}>High pass (raw)</option>
+                  <option value={3}>Low pass (blended)</option>
+                  <option value={4}>High pass (blended)</option>
+                </select>
+              {/if}
             </div>
 
             <div class="control-row checkbox-row">
@@ -558,6 +636,26 @@
     align-items: center;
     gap: 0.5rem;
     cursor: pointer;
+  }
+
+  .freq-controls {
+    min-width: 240px;
+  }
+
+  .freq-controls .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .freq-controls .sub-label {
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+  }
+
+  .freq-controls select {
+    padding: 2px 4px;
   }
 
   .hint {

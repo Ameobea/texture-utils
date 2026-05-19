@@ -167,7 +167,10 @@ const methods = {
     height: number,
     marginXFrac: number,
     marginYFrac: number,
-    contrastCorrectionFactor: number
+    contrastCorrectionFactor: number,
+    frequencyAware: boolean,
+    splitSigma: number,
+    viewMode: number
   ): Promise<Uint8Array> => {
     const engine = await engineP;
 
@@ -177,7 +180,10 @@ const methods = {
       height,
       marginXFrac,
       marginYFrac,
-      contrastCorrectionFactor
+      contrastCorrectionFactor,
+      frequencyAware,
+      splitSigma,
+      viewMode
     );
     return Comlink.transfer(generated, [generated.buffer]);
   },
