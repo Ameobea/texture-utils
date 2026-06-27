@@ -205,6 +205,45 @@ const methods = {
     return Comlink.transfer(filtered, [filtered.buffer]);
   },
 
+  // distortion correction
+  warpSetSource: async (pixelData: Uint8Array, width: number, height: number) => {
+    const engine = await engineP;
+
+    engine.warp_set_source(pixelData, width, height);
+  },
+  warpPerspective: async (
+    homography: Float64Array,
+    outWidth: number,
+    outHeight: number
+  ): Promise<Uint8Array> => {
+    const engine = await engineP;
+
+    const warped = engine.warp_perspective(homography, outWidth, outHeight);
+    return Comlink.transfer(warped, [warped.buffer]);
+  },
+  detectPerspective: async (
+    cannyLow: number,
+    cannyHigh: number,
+    voteThreshold: number,
+    angleTolDeg: number
+  ): Promise<Float32Array> => {
+    const engine = await engineP;
+
+    const result = engine.detect_perspective(cannyLow, cannyHigh, voteThreshold, angleTolDeg);
+    return Comlink.transfer(result, [result.buffer]);
+  },
+  solveGuides: async (
+    endpoints: Float32Array,
+    isVertical: Uint8Array,
+    width: number,
+    height: number
+  ): Promise<Float32Array> => {
+    const engine = await engineP;
+
+    const result = engine.solve_guides(endpoints, isVertical, width, height);
+    return Comlink.transfer(result, [result.buffer]);
+  },
+
   // reverse color ramp
   reverseColorRampSetInputTexture: async (textureData: Uint8Array, isSrgb: boolean) => {
     const engine = await engineP;

@@ -13,6 +13,7 @@ palette = "0.6"
 console_error_panic_hook = "0.1"
 nalgebra = { version = "0.32" }
 fastapprox = "0.3.1"
+imageproc = { version = "0.25", default-features = false }
 
 [dependencies.kmeans_colors]
 version = "0.5"

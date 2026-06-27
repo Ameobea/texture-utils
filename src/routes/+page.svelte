@@ -114,6 +114,17 @@
       </p>
     </div>
     <div class="util">
+      <a href="/distortion-correction"><h2>Distortion Correction</h2></a>
+      <p>
+        Corrects perspective (keystone) distortion in photos of flat surfaces — tiled floors,
+        textured walls — to produce clean, square diffuse maps for 3D rendering.
+      </p>
+      <p>
+        Auto-detects the distortion from straight lines in the image (Canny + Hough vanishing
+        points), with manual corner and guide-line controls for fine-tuning.
+      </p>
+    </div>
+    <div class="util">
       <a href="/svg-path-editor"><h2>SVG Path Editor</h2></a>
       <p>
         Edit simple open SVG paths on a grid with snapping, point insertion/removal, and live path

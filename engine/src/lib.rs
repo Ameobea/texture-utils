@@ -5,6 +5,7 @@ use palette::{ColorDifference, FromColor, IntoColor, Lab, Pixel, Srgb, white_poi
 use wasm_bindgen::prelude::*;
 
 pub mod color_ramp_builder;
+pub mod distortion_correct;
 pub mod normal_map_compose;
 pub mod normal_map_filter;
 pub mod reverse_color_ramp;
