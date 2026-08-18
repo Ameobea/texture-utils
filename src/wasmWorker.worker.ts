@@ -244,6 +244,91 @@ const methods = {
     return Comlink.transfer(result, [result.buffer]);
   },
 
+  // noise signature
+  nsPreprocess: async (
+    rgba: Uint8Array,
+    size: number,
+    flattenSigma: number
+  ): Promise<Uint8Array> => {
+    const engine = await engineP;
+
+    const out = engine.ns_preprocess(rgba, size, flattenSigma);
+    return Comlink.transfer(out, [out.buffer]);
+  },
+  nsAnalyze: async (
+    rgba: Uint8Array,
+    size: number,
+    maxKernels: number,
+    rampStops: number
+  ): Promise<string> => {
+    const engine = await engineP;
+
+    return engine.ns_analyze(rgba, size, maxKernels, rampStops);
+  },
+  nsField: async (
+    paramsJson: string,
+    width: number,
+    height: number,
+    seed: number
+  ): Promise<Float32Array> => {
+    const engine = await engineP;
+
+    const field = engine.ns_field(paramsJson, width, height, seed);
+    return Comlink.transfer(field, [field.buffer]);
+  },
+  nsPreview: async (
+    paramsJson: string,
+    rampJson: string,
+    width: number,
+    height: number,
+    seed: number,
+    grayscale: boolean
+  ): Promise<Uint8Array> => {
+    const engine = await engineP;
+
+    const pixels = engine.ns_preview(paramsJson, rampJson, width, height, seed, grayscale);
+    return Comlink.transfer(pixels, [pixels.buffer]);
+  },
+
+  nsFitTexton: async (
+    rgba: Uint8Array,
+    size: number,
+    ksize: number,
+    seed: number
+  ): Promise<string> => {
+    const engine = await engineP;
+
+    return engine.ns_fit_texton(rgba, size, ksize, seed);
+  },
+  nsTextonPreview: async (
+    kernelU8: Uint8Array,
+    ksize: number,
+    scale: number,
+    offset: number,
+    width: number,
+    height: number,
+    seed: number,
+    coverage: number,
+    rampJson: string,
+    grayscale: boolean
+  ): Promise<Uint8Array> => {
+    const engine = await engineP;
+
+    const pixels = engine.ns_texton_preview(
+      kernelU8,
+      ksize,
+      scale,
+      offset,
+      width,
+      height,
+      seed,
+      coverage,
+      rampJson,
+      grayscale
+    );
+    return Comlink.transfer(pixels, [pixels.buffer]);
+  },
+
   // reverse color ramp
   reverseColorRampSetInputTexture: async (textureData: Uint8Array, isSrgb: boolean) => {
     const engine = await engineP;

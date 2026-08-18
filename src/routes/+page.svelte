@@ -91,6 +91,29 @@
       <p>Tool to create a color ramp that can be used to map a grayscale texture to color.</p>
     </div>
     <div class="util">
+      <a href="/noise-signature"><h2>Noise Signature Extractor</h2></a>
+      <p>
+        Fits a compact spectral fingerprint (~32 bytes) + color ramp to a texture photo and
+        re-synthesizes a seamless texture from just those parameters.
+      </p>
+      <p>
+        Outputs copy-pastable Geoscript code. Works best on stochastic materials (concrete, sand,
+        stucco, wood grain); structured layouts like bricks won't survive — by design.
+      </p>
+    </div>
+    <div class="util">
+      <a href="/spectral-noise-playground"><h2>Spectral Noise Playground</h2></a>
+      <p>
+        Interactive playground for the <code>spectral_noise</code> synthesizer: hand-edit the
+        log-polar band spectrum, spectral peaks, and color ramp with live previews of both the
+        texture and its model spectrum.
+      </p>
+      <p>
+        A learning tool for building an intuition of how spectra map to texture appearance.
+        Emits the same copy-pastable Geoscript snippets as the extractor.
+      </p>
+    </div>
+    <div class="util">
       <a href="/normal-map-composer"><h2>Normal Map Composer</h2></a>
       <p>
         Blends two tangent-space normal maps using

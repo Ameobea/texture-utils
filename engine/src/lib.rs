@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 
 pub mod color_ramp_builder;
 pub mod distortion_correct;
+pub mod noise_signature;
 pub mod normal_map_compose;
 pub mod normal_map_filter;
 pub mod reverse_color_ramp;
